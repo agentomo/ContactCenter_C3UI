@@ -201,7 +201,6 @@ export default function DataTablesPage() {
 
     for (const keyInSchema in schemaProperties) {
         if (Object.prototype.hasOwnProperty.call(schemaProperties, keyInSchema)) {
-            // For updates, we send the complete row data, including the PK.
             let value = editedRowData[keyInSchema];
 
             if (value === undefined) { 
@@ -209,7 +208,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 payloadForUpdate[keyInSchema] = null; 
             } else if (typeof value === 'boolean') {
-                payloadForUpdate[keyInSchema] = value; // Send actual boolean
+                payloadForUpdate[keyInSchema] = String(value); // Send booleans as strings "true" or "false"
             }
             else {
                 payloadForUpdate[keyInSchema] = value;
@@ -217,7 +216,7 @@ export default function DataTablesPage() {
         }
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS INCLUDED, native booleans):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS INCLUDED, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -293,7 +292,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 rowDataPayload[key] = null;
             } else if (typeof value === 'boolean') {
-                rowDataPayload[key] = value; 
+                rowDataPayload[key] = String(value); // Send booleans as strings "true" or "false"
             }
             else {
                 rowDataPayload[key] = value;
@@ -301,7 +300,7 @@ export default function DataTablesPage() {
         }
     }
     
-    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT, native booleans):", JSON.stringify(rowDataPayload, null, 2));
+    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT, Booleans as STRINGS):", JSON.stringify(rowDataPayload, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -690,6 +689,8 @@ export default function DataTablesPage() {
     </div>
   );
 }
+    
+
     
 
     
