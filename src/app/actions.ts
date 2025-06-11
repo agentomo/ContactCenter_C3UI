@@ -54,7 +54,6 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     client.setEnvironment(regionHost);
     try {
       await client.loginClientCredentialsGrant(clientId, clientSecret);
-      // console.log('[actions.ts] getAuthenticatedClient: Successfully authenticated with Genesys Cloud API.');
     } catch (authError: any) {
       console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud authentication failed:', authError.message || authError);
       let errorMessage = 'Genesys Cloud authentication failed.';
@@ -179,7 +178,6 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    // console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, error.body || error.message);
     let details = error.message;
     if (error.body && error.body.message) {
         details = error.body.message;
@@ -191,6 +189,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
     } else if ((error as any).response?.data?.message) { 
         details = (error as any).response.data.message;
     }
+    console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, details);
     throw new Error(`Failed to update skills for user ${userId}. Details: ${details}`);
   }
 }
@@ -285,7 +284,7 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       primaryKeyField: determinedPrimaryKeyField,
     };
   } catch (error: any) {
-    // console.error(`[actions.ts] getDataTableDetails: Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
+    console.error(`[actions.ts] getDataTableDetails: Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch DataTable details for ${dataTableId}. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -359,116 +358,46 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     }
 }
 
-// --- Queue Observation Types and Actions ---
-export interface QueueObservationData {
+// --- Queue Basic Info Types and Actions ---
+export interface QueueBasicData {
   id: string;
   name: string;
   divisionId?: string;
   divisionName?: string;
-  onQueueUserCount: number;
-  interactingCount: number;
-  waitingCount: number;
 }
 
-export async function getQueueObservations(): Promise<QueueObservationData[]> {
+export async function getActiveQueues(): Promise<QueueBasicData[]> {
   await getAuthenticatedClient();
   const routingApi = new platformClient.RoutingApi();
-  const analyticsApi = new platformClient.AnalyticsApi();
 
-  let activeQueues: any[] = [];
+  let activeQueuesEntities: any[] = [];
   try {
     const queuesResponse = await routingApi.getRoutingQueues({
       pageSize: 200,
       pageNumber: 1,
       state: 'active',
-      name: '%', // Wildcard to fetch all active queues
-      expand: ['division'],
+      name: '%', // Wildcard to fetch all active queues matching the state
+      expand: ['division'], // Expand to get division details
     });
-    activeQueues = queuesResponse.entities || [];
-    console.log(`[actions.ts] getQueueObservations: Initial fetch found ${activeQueues.length} queues from API. Details: ${JSON.stringify(activeQueues.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
+    activeQueuesEntities = queuesResponse.entities || [];
+    console.log(`[actions.ts] getActiveQueues: Initial fetch found ${activeQueuesEntities.length} queues from API. Details: ${JSON.stringify(activeQueuesEntities.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
+
   } catch (error: any) {
-    console.error('[actions.ts] getQueueObservations: Error fetching active queues:', error.body || error.message);
-    // If fetching the list of active queues fails, it should throw an error, as there's nothing to show.
+    console.error('[actions.ts] getActiveQueues: Error fetching active queues:', error.body || error.message);
     throw new Error(`Failed to retrieve active queues from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
   }
 
-  // If no active queues are found at all, return an empty array.
-  // The frontend will then display the "No Queue Data Available" message.
-  if (activeQueues.length === 0) {
-    console.warn('[actions.ts] getQueueObservations: No queues found with state "active" (or visible to OAuth client). This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
+  if (activeQueuesEntities.length === 0) {
+    console.warn('[actions.ts] getActiveQueues: No queues found with state "active" (or visible to OAuth client). This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
     return [];
   }
 
-  const queueDataMap: Map<string, QueueObservationData> = new Map(
-    activeQueues.map(q => [
-      q.id!,
-      {
-        id: q.id!,
-        name: q.name!,
-        divisionId: q.division?.id,
-        divisionName: q.division?.name,
-        onQueueUserCount: 0,
-        interactingCount: 0,
-        waitingCount: 0,
-      },
-    ])
-  );
-
-  const observationQuery = {
-    filter: {
-      type: 'or',
-      predicates: activeQueues.map(q => ({
-        type: 'dimension',
-        dimension: 'queueId',
-        operator: 'matches',
-        value: q.id,
-      })),
-    },
-    metrics: ['oOnQueueUsers', 'oInteracting', 'oWaiting'],
-  };
-
-  try {
-    // Only proceed if there are active queues to observe
-    if (activeQueues.length > 0) {
-      const observationResult: any = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery);
-      if (observationResult && observationResult.results) {
-        observationResult.results.forEach((result: any) => {
-          const queueId = result.group.queueId;
-          const queueEntry = queueDataMap.get(queueId);
-          if (queueEntry) {
-            result.data.forEach((metricData: any) => {
-              switch (metricData.metric) {
-                case 'oOnQueueUsers':
-                  queueEntry.onQueueUserCount = metricData.stats?.count || 0;
-                  break;
-                case 'oInteracting':
-                  queueEntry.interactingCount = metricData.stats?.count || 0;
-                  break;
-                case 'oWaiting':
-                  queueEntry.waitingCount = metricData.stats?.count || 0;
-                  break;
-              }
-            });
-          }
-        });
-        // console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${observationResult.results.length} queues that had metrics.`);
-      } else {
-         console.warn('[actions.ts] getQueueObservations: No observation data returned from analytics query, or results were empty. Active queues will be shown with default 0 metrics.');
-      }
-    }
-  } catch (error: any) {
-    // If fetching metrics fails, log the error but DO NOT re-throw.
-    // This allows the function to proceed and return the list of active queues found earlier,
-    // with their metrics defaulted to 0.
-    console.error('[actions.ts] getQueueObservations: Error fetching queue observation metrics:', error.body || error.message);
-    console.warn('[actions.ts] getQueueObservations: Proceeding to return active queues with default 0 metrics due to an error in fetching live observation data for them.');
-  }
-
-  // This will return all queues that were initially identified as 'active',
-  // with metrics populated if available, or defaulted to 0 otherwise.
-  const allQueuesWithData = Array.from(queueDataMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  // console.log(`[actions.ts] getQueueObservations: Returning ${allQueuesWithData.length} total active queues (metrics may be defaulted if live data was unavailable for some/all).`);
-  return allQueuesWithData;
+  const mappedQueues = activeQueuesEntities.map(q => ({
+    id: q.id!,
+    name: q.name!,
+    divisionId: q.division?.id,
+    divisionName: q.division?.name,
+  }));
+  
+  return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
-
-    
