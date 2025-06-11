@@ -6,6 +6,9 @@ import { Toaster } from "@/components/ui/toaster";
 export const metadata: Metadata = {
   title: 'CapitalGroup Genesys Configurator', // Updated title
   description: 'View user statuses and manage skills in Genesys Cloud.', // Updated description
+  icons: {
+    icon: '/favicon.ico', // Explicitly define the conventional path for favicon
+  },
 };
 
 export default function RootLayout({
