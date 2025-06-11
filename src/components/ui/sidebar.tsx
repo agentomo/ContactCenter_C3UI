@@ -534,63 +534,63 @@ const sidebarMenuButtonVariants = cva(
   }
 )
 
-const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
-  React.ComponentProps<"button"> & {
-    asChild?: boolean
-    isActive?: boolean
-    tooltip?: string | React.ComponentProps<typeof TooltipContent>
-  } & VariantProps<typeof sidebarMenuButtonVariants>
->(
+// Base props for SidebarMenuButton, including those from React.ButtonHTMLAttributes
+// and custom props like isActive, variant, size, tooltip.
+// It does NOT define 'asChild' for its own rendering strategy, as it always renders a <button>
+// with specific children structure (icon, text). It WILL receive 'asChild' from Link via ...rest.
+interface SidebarMenuButtonProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "type">, // Omit 'type' if you want to ensure it's always 'button' or not set
+    VariantProps<typeof sidebarMenuButtonVariants> {
+  isActive?: boolean;
+  tooltip?: string | React.ComponentProps<typeof TooltipContent>;
+  // No 'asChild' here for SBM's own logic, it's handled via ...rest if passed by Link
+}
+
+const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
   (
-    componentProps,
+    { // Destructure SBM-specific and visual props first
+      isActive = false,
+      variant = "default", // Default from cva
+      size = "default",   // Default from cva
+      tooltip: initialTooltip,
+      className,
+      children, // These are <item.icon /> and <span> from the layout
+      ...rest // 'rest' contains ALL other props from parent (e.g., Link),
+              // including href, onClick, and potentially asChild
+    },
     ref
   ) => {
-    const {
-      asChild: ownAsChildProp, // Renamed to avoid conflict
-      isActive = false,
-      variant = "default",
-      size = "default",
-      tooltip: initialTooltip, // Use a different name for the initial prop
-      className,
-      ...restFromComponentProps
-    } = componentProps;
+    // useSidebar must be called unconditionally at the top of the component
+    const { state, isMobile } = useSidebar();
 
-    const { isMobile, state } = useSidebar()
+    // 'rest' might contain an 'asChild' prop passed by a parent like <Link asChild>.
+    // This 'asChild' prop should NOT be passed to the DOM <button> element.
+    // We extract it here and discard it (_forwardedAsChild),
+    // and spread the remaining props (propsForButtonElement) onto the <button>.
+    const { asChild: _forwardedAsChild, ...propsForButtonElement } = rest;
 
-    const { asChild: asChildFromParent, ...elementSpecificProps } = restFromComponentProps;
-    const actualAsChild = ownAsChildProp ?? asChildFromParent ?? false;
-
-    const buttonElement = actualAsChild ? (
-      <Slot
-        ref={ref}
-        data-sidebar="menu-button"
-        data-size={size}
-        data-active={isActive}
-        className={cn(sidebarMenuButtonVariants({ variant, size, className }))}
-        {...elementSpecificProps}
-      />
-    ) : (
+    // SidebarMenuButton always renders a <button> element with its children (icon, text) inside.
+    const buttonElement = (
       <button
         ref={ref}
         data-sidebar="menu-button"
         data-size={size}
         data-active={isActive}
         className={cn(sidebarMenuButtonVariants({ variant, size, className }))}
-        {...elementSpecificProps}
-      />
+        {...propsForButtonElement} // Spreads props like href, onClick from Link. _forwardedAsChild is NOT spread.
+      >
+        {children} {/* Renders <item.icon /> and <span>{item.label}</span> */}
+      </button>
     );
 
-    // Use 'let' for tooltipContentProps to make it mutable
+    // Tooltip rendering logic
     let tooltipContentProps = initialTooltip;
-
     if (!tooltipContentProps) {
-      return buttonElement
+      return buttonElement; // No tooltip, return the button directly
     }
 
     if (typeof tooltipContentProps === "string") {
-      // Assign to the mutable variable
-      tooltipContentProps = { children: tooltipContentProps }
+      tooltipContentProps = { children: tooltipContentProps };
     }
 
     return (
@@ -599,14 +599,15 @@ const SidebarMenuButton = React.forwardRef<
         <TooltipContent
           side="right"
           align="center"
-          hidden={state !== "collapsed" || isMobile}
-          {...tooltipContentProps} // Use the mutable variable here
+          hidden={state !== "collapsed" || isMobile} // Uses state and isMobile from useSidebar()
+          {...tooltipContentProps}
         />
       </Tooltip>
-    )
+    );
   }
-)
+);
 SidebarMenuButton.displayName = "SidebarMenuButton"
+
 
 const SidebarMenuAction = React.forwardRef<
   HTMLButtonElement,
