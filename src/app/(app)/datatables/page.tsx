@@ -187,35 +187,32 @@ export default function DataTablesPage() {
   };
 
   const handleSaveEdit = () => {
-    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.primaryKeyField) {
-      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, or primary key field definition).", variant: "destructive" });
+    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties) {
+      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, or schema).", variant: "destructive" });
       return;
     }
     
-    // Prepare the payload. This will now include ALL fields from editedRowData,
-    // including the primary key field.
     const payloadForUpdate: DataTableRow = {};
-    if (editedRowData) { 
-        for (const key in editedRowData) {
-            if (Object.prototype.hasOwnProperty.call(editedRowData, key)) {
-            let value = (editedRowData as any)[key];
-            if (typeof value === 'number' && Number.isNaN(value)) {
+    const schemaProperties = dataTableDetails.schema.properties;
+
+    for (const key in schemaProperties) {
+        if (Object.prototype.hasOwnProperty.call(schemaProperties, key)) {
+            let value = editedRowData[key];
+
+            if (value === undefined) { // Ensure all schema keys are present
+                payloadForUpdate[key] = null;
+            } else if (typeof value === 'number' && Number.isNaN(value)) {
                 payloadForUpdate[key] = null; // Convert NaN numbers to null
             } else {
                 payloadForUpdate[key] = value;
             }
-            }
         }
-    } else {
-        toast({ title: "Error", description: "No row data to save.", variant: "destructive" });
-        return;
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (PK INCLUDED in body this time):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (PK INCLUDED in body, ALL SCHEMA FIELDS PRESENT):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
-        // editingRowId is the value of the primary key, used in the URL path
         await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate);
         toast({ title: "Row Updated", description: "Successfully updated the row." });
         fetchDataForTable(selectedTableId); 
@@ -231,19 +228,27 @@ export default function DataTablesPage() {
   };
 
   const handleOpenCreateDialog = () => {
-    if (!dataTableDetails || !dataTableDetails.primaryKeyField) {
-      toast({ title: "Cannot Create Row", description: "Primary key field not defined for the selected table. Creation is disabled.", variant: "destructive"});
+    if (!dataTableDetails || !dataTableDetails.primaryKeyField || !dataTableDetails.schema.properties) {
+      toast({ title: "Cannot Create Row", description: "Essential table schema information (like primary key or properties) is missing. Creation is disabled.", variant: "destructive"});
       return;
     }
     const initialData: DataTableRow = {};
     Object.keys(dataTableDetails.schema.properties).forEach(colName => {
       const colSchema = getColumnSchema(colName);
-      if (colSchema?.type === 'boolean' || (colSchema?.type === 'string' && (String(initialData[colName]).toLowerCase() === 'true' || String(initialData[colName]).toLowerCase() === 'false'))) {
-        initialData[colName] = false; // Default booleans to false
+      // Ensure default value is set based on type
+      if (colSchema?.type === 'boolean') {
+        initialData[colName] = false;
+      } else if (colSchema?.type === 'string') {
+         // For strings that might represent booleans, check if it's "true" or "false" like in other parts
+        const lowerDefault = String(initialData[colName]).toLowerCase(); // initialData[colName] will be undefined here
+        if (lowerDefault === 'true' || lowerDefault === 'false') { // This condition likely won't be met unless a default is set elsewhere
+            initialData[colName] = false; // Default string "booleans" to false
+        } else {
+            initialData[colName] = ''; // Default other strings to empty
+        }
       } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
         initialData[colName] = null; 
-      }
-      else {
+      } else {
         initialData[colName] = ''; 
       }
     });
@@ -265,8 +270,8 @@ export default function DataTablesPage() {
   };
 
   const handleSaveCreate = () => {
-    if (!selectedTableId || !newRowData || !dataTableDetails?.primaryKeyField) {
-      toast({ title: "Error Creating Row", description: "Missing critical data (e.g., table ID, primary key field definition, or row data).", variant: "destructive" });
+    if (!selectedTableId || !newRowData || !dataTableDetails?.primaryKeyField || !dataTableDetails?.schema?.properties) {
+      toast({ title: "Error Creating Row", description: "Missing critical data (e.g., table ID, primary key field definition, schema properties, or row data).", variant: "destructive" });
       return;
     }
     const pkField = dataTableDetails.primaryKeyField;
@@ -275,14 +280,24 @@ export default function DataTablesPage() {
         return;
     }
 
-    const rowDataPayload: DataTableRow = { ...newRowData };
-     for (const key in rowDataPayload) {
-      if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
-        if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
-          rowDataPayload[key] = null;
+    const rowDataPayload: DataTableRow = {};
+    const schemaProperties = dataTableDetails.schema.properties;
+
+    for (const key in schemaProperties) {
+        if (Object.prototype.hasOwnProperty.call(schemaProperties, key)) {
+            let value = newRowData[key];
+
+            if (value === undefined) {
+                rowDataPayload[key] = null;
+            } else if (typeof value === 'number' && Number.isNaN(value)) {
+                rowDataPayload[key] = null;
+            } else {
+                rowDataPayload[key] = value;
+            }
         }
-      }
     }
+    
+    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT):", JSON.stringify(rowDataPayload, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -605,8 +620,6 @@ export default function DataTablesPage() {
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
                       } else if (colSchema.type === 'string') {
-                         // For create, initialize string booleans with actual boolean if desired, or handle input
-                         // Here, we just check type for rendering, assuming `initialData` in `handleOpenCreateDialog` handles default value.
                         const lowerCurrentValue = String(currentValue).toLowerCase();
                         if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
                             treatAsBooleanInput = true;
