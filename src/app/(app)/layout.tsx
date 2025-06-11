@@ -22,10 +22,10 @@ interface AppLayoutProps {
 }
 
 const navItems = [
-  { href: '/', label: 'Status Board', icon: LayoutDashboard },
+  { href: '/', label: 'User Presence', icon: LayoutDashboard },
   { href: '/skills', label: 'Skills Management', icon: ListTodo },
   { href: '/datatables', label: 'DataTables', icon: Database },
-  { href: '/queues', label: 'Queues', icon: LayoutList }, // Added Queues link
+  { href: '/queues', label: 'Queues', icon: LayoutList },
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {

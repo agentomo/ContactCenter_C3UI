@@ -102,7 +102,7 @@ export default function HomePage() {
         <div className="flex items-center justify-center mb-4" role="banner">
           <Users className="w-12 h-12 mr-3 text-primary" />
           <h1 className="text-3xl sm:text-4xl font-headline font-bold text-primary tracking-tight">
-            Genesys Status Board
+            User Presence
           </h1>
         </div>
         <p className="text-md sm:text-lg text-muted-foreground font-body max-w-2xl mx-auto">
@@ -162,9 +162,10 @@ export default function HomePage() {
       </main>
 
       <footer className="w-full max-w-6xl mt-12 text-center text-xs text-muted-foreground font-body">
-        <p>&copy; {new Date().getFullYear()} Genesys Status Board. All rights reserved (conceptually).</p>
+        <p>&copy; {new Date().getFullYear()} User Presence. All rights reserved (conceptually).</p>
         <p className="mt-1">This application demonstrates API authentication and data retrieval using OAuth 2.0 Client Credentials Grant.</p>
       </footer>
     </div>
   );
 }
+
