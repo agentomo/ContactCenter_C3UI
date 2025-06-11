@@ -8,14 +8,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GenesysUserTable } from '@/components/genesys-user-table';
-import { RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search, Users } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { STATUS_ORDER, statusVisuals } from '@/components/status-indicator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+interface Division {
+  id: string;
+  name: string;
+}
 
 export default function HomePage() {
   const [users, setUsers] = useState<UserStatus[]>([]);
   const [isPending, startTransition] = useTransition();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDivisionId, setSelectedDivisionId] = useState<string>('all');
   const { toast } = useToast();
 
   const fetchUsers = () => {
@@ -23,7 +36,7 @@ export default function HomePage() {
       try {
         const fetchedUsers = await getGenesysUsers();
         setUsers(fetchedUsers);
-        if (document.hidden) return; 
+        if (document.hidden) return;
         toast({
           title: "Data Refreshed",
           description: `Successfully updated status for ${fetchedUsers.length} users.`,
@@ -44,7 +57,29 @@ export default function HomePage() {
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []);
+
+  const divisions = useMemo(() => {
+    const allDivs = users.map(user => ({ id: user.divisionId, name: user.divisionName }));
+    const uniqueDivsMap = new Map<string, Division>();
+    allDivs.forEach(div => {
+      if (div.id && div.id !== 'N/A' && !uniqueDivsMap.has(div.id)) {
+        uniqueDivsMap.set(div.id, div);
+      }
+    });
+    return [{ id: 'all', name: 'All Divisions' }, ...Array.from(uniqueDivsMap.values()).sort((a, b) => a.name.localeCompare(b.name))];
+  }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    let tempUsers = users;
+    if (selectedDivisionId !== 'all') {
+      tempUsers = tempUsers.filter(user => user.divisionId === selectedDivisionId);
+    }
+    if (!searchTerm.trim()) return tempUsers;
+    return tempUsers.filter(user =>
+      user.name.toLowerCase().includes(searchTerm.toLowerCase().trim())
+    );
+  }, [users, searchTerm, selectedDivisionId]);
 
   const statusCounts = useMemo(() => {
     const counts = STATUS_ORDER.reduce((acc, status) => {
@@ -52,34 +87,26 @@ export default function HomePage() {
       return acc;
     }, {} as Record<UserStatus['status'], number>);
 
-    users.forEach(user => {
+    filteredUsers.forEach(user => { // Use filteredUsers to count based on current filters
       if (counts[user.status] !== undefined) {
         counts[user.status]++;
       }
     });
     return counts;
-  }, [users]);
+  }, [filteredUsers]);
 
-  const filteredUsers = useMemo(() => {
-    if (!searchTerm.trim()) return users;
-    return users.filter(user =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase().trim())
-    );
-  }, [users, searchTerm]);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 flex flex-col items-center selection:bg-primary/30 selection:text-primary-foreground">
       <header className="w-full max-w-6xl mb-8 text-center">
         <div className="flex items-center justify-center mb-4" role="banner">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 mr-3 text-primary">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-3.5-9.5c0 .83.67 1.5 1.5 1.5h4c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5h-4c-.83 0-1.5.67-1.5 1.5zm1 4c0 .83.67 1.5 1.5 1.5h2c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5h-2c-.83 0-1.5.67-1.5 1.5z"/>
-          </svg>
+          <Users className="w-12 h-12 mr-3 text-primary" />
           <h1 className="text-3xl sm:text-4xl font-headline font-bold text-primary tracking-tight">
             Genesys Status Board
           </h1>
         </div>
         <p className="text-md sm:text-lg text-muted-foreground font-body max-w-2xl mx-auto">
-          Monitor the real-time presence of your Genesys Cloud agents.
+          Monitor the real-time presence and division of your Genesys Cloud agents.
         </p>
       </header>
 
@@ -100,7 +127,7 @@ export default function HomePage() {
       </section>
 
       <main className="w-full max-w-6xl bg-card p-4 sm:p-6 rounded-xl shadow-2xl">
-        <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 flex-wrap">
           <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -108,9 +135,23 @@ export default function HomePage() {
               placeholder="Filter by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 w-full sm:w-[250px] md:w-[300px] h-11"
+              className="pl-9 w-full sm:w-[200px] md:w-[250px] h-11"
               aria-label="Filter users by name"
             />
+          </div>
+          <div className="w-full sm:w-auto">
+            <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
+              <SelectTrigger className="w-full sm:w-[200px] md:w-[250px] h-11" aria-label="Filter by division">
+                <SelectValue placeholder="Filter by division" />
+              </SelectTrigger>
+              <SelectContent>
+                {divisions.map((division) => (
+                  <SelectItem key={division.id} value={division.id}>
+                    {division.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button onClick={fetchUsers} disabled={isPending} variant="default" size="lg" className="w-full sm:w-auto">
             <RefreshCw className={`mr-2 h-5 w-5 ${isPending ? 'animate-spin' : ''}`} />
@@ -119,7 +160,7 @@ export default function HomePage() {
         </div>
         <GenesysUserTable users={filteredUsers} isLoading={isPending && users.length === 0} />
       </main>
-      
+
       <footer className="w-full max-w-6xl mt-12 text-center text-xs text-muted-foreground font-body">
         <p>&copy; {new Date().getFullYear()} Genesys Status Board. All rights reserved (conceptually).</p>
         <p className="mt-1">This application demonstrates API authentication and data retrieval using OAuth 2.0 Client Credentials Grant.</p>
@@ -127,4 +168,3 @@ export default function HomePage() {
     </div>
   );
 }
-

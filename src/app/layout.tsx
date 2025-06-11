@@ -1,10 +1,12 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"; // Import Toaster
+import { Users } from 'lucide-react'; // Changed Icon
 
 export const metadata: Metadata = {
   title: 'Genesys Status Board',
-  description: 'View the current status of your Genesys Cloud users.',
+  description: 'View the current status and division of your Genesys Cloud users.',
 };
 
 export default function RootLayout({

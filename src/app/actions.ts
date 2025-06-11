@@ -7,6 +7,8 @@ export interface UserStatus {
   id: string;
   name: string;
   status: 'Available' | 'Busy' | 'Offline' | 'On Queue' | 'Away' | 'Meeting';
+  divisionId: string;
+  divisionName: string;
 }
 
 // Helper function to map Genesys Cloud system presence to UserStatus
@@ -15,16 +17,16 @@ function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['sta
 
   switch (genesysSystemPresence.toUpperCase()) {
     case 'AVAILABLE':
-    case 'IDLE': 
+    case 'IDLE':
       return 'Available';
     case 'BUSY':
-    case 'MEAL': 
+    case 'MEAL':
     case 'TRAINING':
       return 'Busy';
     case 'AWAY':
-    case 'BREAK': 
+    case 'BREAK':
       return 'Away';
-    case 'ON_QUEUE': 
+    case 'ON_QUEUE':
       return 'On Queue';
     case 'MEETING':
       return 'Meeting';
@@ -44,6 +46,10 @@ interface GenesysUser {
       id: string;
       systemPresence?: string;
     };
+  };
+  division?: {
+    id: string;
+    name: string;
   };
 }
 
@@ -72,9 +78,9 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     console.log('Successfully authenticated with Genesys Cloud API.');
 
     const userResponse = await usersApi.getUsers({
-      pageSize: 100, 
+      pageSize: 100,
       pageNumber: 1,
-      expand: ['presence'], 
+      expand: ['presence', 'division'], // Added 'division'
     });
 
     if (!userResponse.entities) {
@@ -87,18 +93,19 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
         id: user.id,
         name: user.name || 'Unknown User',
         status: mapGenesysToUserStatus(user.presence?.presenceDefinition?.systemPresence),
+        divisionId: user.division?.id || 'N/A',
+        divisionName: user.division?.name || 'N/A',
       };
     });
-    
+
     console.log(`Fetched and mapped ${mappedUsers.length} users.`);
     return mappedUsers;
 
   } catch (error: any) {
     console.error('Error fetching or processing Genesys Cloud user data (full error object):', error);
-    
+
     let detailedErrorMessage = 'An unknown error occurred with the Genesys Cloud API.';
     if (error.isAxiosError && error.response) {
-      // Log the detailed error response from Genesys API
       console.error('Genesys API Error Response Body:', error.response.data);
       detailedErrorMessage = `API Error ${error.response.status}: ${JSON.stringify(error.response.data)}. Trace ID (contextId): ${error.response.data?.contextId || 'N/A'}`;
     } else if (error instanceof Error) {
@@ -112,7 +119,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     } else if (detailedErrorMessage.includes('Unable to find a session for token')) {
         throw new Error('Genesys Cloud session/token issue. Please try again or re-check credentials.');
     }
-    
+
     throw new Error(`Failed to retrieve user statuses from Genesys Cloud. Details: ${detailedErrorMessage}. Check server logs for the full error object and Genesys API response body.`);
   }
 }
