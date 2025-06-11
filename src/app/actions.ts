@@ -1,3 +1,4 @@
+
 'use server';
 
 import platformClient from 'purecloud-platform-client-v2';
@@ -56,7 +57,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
 
   if (!clientId || !clientSecret || !region) {
     console.error('Genesys Cloud API credentials or region not configured in environment variables.');
-    throw new Error('API credentials or region not configured. Please set GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION in your .env.local file.');
+    throw new Error('API credentials or region not configured. Please set GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION in your .env.local file (in the project root).');
   }
 
   const client = platformClient.ApiClient.instance;
@@ -67,7 +68,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
     if (!regionHost) {
       console.error(`Invalid Genesys Cloud region: ${region}. See https://developer.genesys.cloud/platform/api/`);
-      throw new Error(`Invalid Genesys Cloud region specified. Please check your GENESYS_REGION environment variable.`);
+      throw new Error(`Invalid Genesys Cloud region specified: "${region}". Please check your GENESYS_REGION environment variable.`);
     }
     client.setEnvironment(regionHost);
 
@@ -109,6 +110,8 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
         // This can happen if token expired or was invalidated before use
         throw new Error('Genesys Cloud session/token issue. Please try again or re-check credentials.');
     }
-    throw new Error('Failed to retrieve user statuses from Genesys Cloud. Check server logs for details.');
+    // Include the original error message for better client-side debugging
+    const originalErrorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to retrieve user statuses from Genesys Cloud. API Error: ${originalErrorMessage}. Check server logs for more details.`);
   }
 }
