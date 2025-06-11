@@ -161,25 +161,35 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
 
 export async function updateUserSkills(userId: string, skillsToSet: UserRoutingSkillUpdateItem[]): Promise<UserRoutingSkill[]> {
   const apiClient = await getAuthenticatedClient(); 
-
-  console.log(`[actions.ts] updateUserSkills: typeof platformClient: ${typeof platformClient}`);
-  if (platformClient && typeof platformClient.UsersApi === 'function') {
-      console.log(`[actions.ts] updateUserSkills: typeof platformClient.UsersApi: ${typeof platformClient.UsersApi}`);
-      try {
-        const UsersApiPrototype = Object.getPrototypeOf(new platformClient.UsersApi(apiClient));
-        console.log(`[actions.ts] updateUserSkills: platformClient.UsersApi.prototype methods: ${UsersApiPrototype ? Object.getOwnPropertyNames(UsersApiPrototype).join(', ') : 'UsersApi.prototype is null/undefined'}`);
-        if (UsersApiPrototype && typeof (UsersApiPrototype as any).putUserRoutingskills !== 'function') {
-            console.warn('[actions.ts] updateUserSkills: putUserRoutingskills is NOT a function on UsersApi.prototype!');
-        }
-      } catch(protoError: any) {
-        console.error('[actions.ts] updateUserSkills: Error inspecting UsersApi prototype:', protoError.message);
-      }
-  } else {
-      console.error('[actions.ts] updateUserSkills: platformClient or platformClient.UsersApi is not as expected.');
-  }
-
   const usersApi = new platformClient.UsersApi(apiClient);
 
+  console.log(`[actions.ts] updateUserSkills: Instance of usersApi created. Constructor: ${usersApi?.constructor?.name}`);
+
+  // Log all enumerable properties on the instance itself
+  let instanceKeys: string[] = [];
+  if (usersApi) {
+    for (const key in usersApi) {
+      // No Object.prototype.hasOwnProperty.call needed here for simple logging
+      instanceKeys.push(`${key} (type: ${typeof (usersApi as any)[key]})`);
+    }
+  }
+  console.log(`[actions.ts] updateUserSkills: Enumerable keys on usersApi instance: ${instanceKeys.join(', ') || 'None'}`);
+
+  // Log methods from the prototype
+  if (usersApi && Object.getPrototypeOf(usersApi)) {
+    const prototype = Object.getPrototypeOf(usersApi);
+    const prototypeMethods = Object.getOwnPropertyNames(prototype)
+      .filter(name => typeof (prototype as any)[name] === 'function');
+    console.log(`[actions.ts] updateUserSkills: Methods on UsersApi.prototype: ${prototypeMethods.join(', ') || 'None'}`);
+    if (!prototypeMethods.includes('putUserRoutingskills')) {
+      console.warn('[actions.ts] updateUserSkills: putUserRoutingskills NOT FOUND on UsersApi.prototype!');
+    } else {
+      console.log('[actions.ts] updateUserSkills: putUserRoutingskills IS FOUND on UsersApi.prototype.');
+    }
+  } else {
+    console.error('[actions.ts] updateUserSkills: Could not get prototype of usersApi.');
+  }
+  
   const apiFormattedSkills = skillsToSet.map(s => ({
     id: s.skillId, 
     proficiency: s.proficiency,
@@ -188,10 +198,9 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
 
   try {
     console.log(`[actions.ts] updateUserSkills: Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
-    console.log(`[actions.ts] updateUserSkills: Instance of usersApi: ${usersApi ? usersApi.constructor.name : 'null/undefined'}`);
-    console.log(`[actions.ts] updateUserSkills: typeof usersApi.putUserRoutingskills: ${typeof (usersApi as any).putUserRoutingskills}`);
+    console.log(`[actions.ts] updateUserSkills: typeof usersApi.putUserRoutingskills (before call): ${typeof (usersApi as any).putUserRoutingskills}`);
     
-    const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
+    const updatedSkillsData = await (usersApi as any).putUserRoutingskills(userId, apiFormattedSkills);
     
     return (updatedSkillsData.entities || [])
       .filter(skill => skill.id && skill.name && skill.proficiency !== undefined)
@@ -210,8 +219,8 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         } else if (error.body.contextId) {
             details += ` (Trace ID: ${error.body.contextId})`;
         }
-    } else if (error.response?.data?.message) { 
-        details = error.response.data.message;
+    } else if ((error as any).response?.data?.message) { 
+        details = (error as any).response.data.message;
     }
     if (error.message && error.message.toLowerCase().includes("is not a function")) {
       details = error.message; 
@@ -376,5 +385,6 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     
 
     
+
 
 
