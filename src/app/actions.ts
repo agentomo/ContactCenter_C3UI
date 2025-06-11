@@ -151,7 +151,8 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
         name: skill.name!,
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
-  } catch (error: any) {
+  } catch (error: any)
+{
     console.error(`[actions.ts] getUserSkills: Error fetching skills for user ${userId}:`, error.body || error.message);
     throw new Error(`Failed to fetch skills for user ${userId}. Details: ${error.body?.message || error.message}`);
   }
@@ -356,6 +357,7 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
     const body = { ...rowData };
     console.log(`[actions.ts] addDataTableRow: Adding row to table ${dataTableId} with key ${String(rowKey)} and data:`, JSON.stringify(body, null, 2));
     try {
+        // Pass rowData directly, SDK should handle structure.
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
         return newRow as DataTableRow; 
     } catch (error: any) {
@@ -374,18 +376,26 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
+    // Create a fresh copy of rowData to ensure no unexpected mutations if the SDK modifies the object passed to it.
+    const bodyForApi = { ...rowData };
+
+    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}.`);
+    // The original rowData (received from client) is already logged by the client-side calling this action.
+    // Log the body that will actually be sent to the SDK.
+    console.log(`[actions.ts] updateDataTableRow: Sending API body (direct copy of received):`, JSON.stringify(bodyForApi, null, 2));
     
     try {
-        // Pass rowData directly, assuming SDK handles structure.
-        console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(rowData, null, 2));
-        const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, rowData);
+        // Pass the fresh copy of rowData directly.
+        const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, bodyForApi);
         return updatedRow as DataTableRow;
     } catch (error: any) {
         console.error(`[actions.ts] updateDataTableRow: Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message, error);
         let details = error.body?.message || error.message;
         if (error.body?.details?.[0]?.errorMessage) {
             details += ` (${error.body.details[0].errorMessage})`;
+        } else if (error.body?.code === 'flows.datatables.syntax.error' && error.status === 400) {
+            // The error we've been seeing
+            details = `Syntax error with the provided data. The API rejected the row item. (Original msg: ${error.body?.message || 'N/A'})`;
         }
         throw new Error(`Failed to update row ${rowId} in DataTable ${dataTableId}. Details: ${details}`);
     }
@@ -446,4 +456,3 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
     
-
