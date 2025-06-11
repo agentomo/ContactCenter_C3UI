@@ -200,7 +200,6 @@ export interface DataTable {
   id: string;
   name: string;
   description?: string;
-  // divisionId?: string; // Division info might require separate handling
 }
 
 export interface DataTableColumn {
@@ -211,7 +210,7 @@ export interface DataTableColumn {
 
 export interface DataTableSchema {
   properties: Record<string, DataTableColumn>; 
-  primaryKey?: string[]; // Genesys API might use 'key' for the name of the key property under schema object.
+  primaryKey?: string[]; 
 }
 
 export interface DataTableRow {
@@ -220,7 +219,7 @@ export interface DataTableRow {
 
 export interface DataTableDetails extends DataTable {
   schema: DataTableSchema;
-  primaryKeyField?: string; // The name of the field that is the primary key
+  primaryKeyField?: string; 
 }
 
 export async function getDataTables(): Promise<DataTable[]> {
@@ -243,42 +242,31 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
   await getAuthenticatedClient();
   const architectApi = new platformClient.ArchitectApi();
   try {
-    // The expand parameter for schema is usually 'schema.properties' or just 'schema'
-    const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); // 'expand' might not be strictly typed in all SDK versions
+    const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); 
     
     const properties: Record<string, DataTableColumn> = {};
-    let primaryKeyField: string | undefined = undefined;
+    // Directly use dt.schema.key as the primary key field name.
+    // If dt.schema.key is null, undefined, or an empty string, primaryKeyField will be undefined.
+    const determinedPrimaryKeyField = dt.schema?.key && dt.schema.key.trim() !== '' ? dt.schema.key.trim() : undefined;
 
     if (dt.schema?.properties) {
-        for (const [key, value] of Object.entries(dt.schema.properties as any)) {
-            // Genesys sometimes nests the actual column type under a 'type' object, or directly as a string.
-            // And sometimes it's '$ref' for complex types. We'll simplify.
+        for (const [colName, colDefinition] of Object.entries(dt.schema.properties as Record<string, {type: string | {type: string}} >)) {
             let columnType = 'string'; // Default to string
-            if (typeof (value as any).type === 'string') {
-                columnType = (value as any).type;
-            } else if (typeof (value as any).type === 'object' && (value as any).type.type === 'string') {
-                 columnType = (value as any).type.type; // Example for a specific structure
+            if (typeof colDefinition.type === 'string') {
+                columnType = colDefinition.type;
+            } else if (typeof colDefinition.type === 'object' && typeof colDefinition.type.type === 'string') {
+                 columnType = colDefinition.type.type; 
             }
-            // The isPrimaryKey property might not be directly on schema.properties[key].
-            // It's usually that one of the properties is named 'key' or specified in schema.key
-            // Or the column whose name matches `dt.schema.key` is the primary key.
-            const isPK = dt.schema?.key === key;
-            if (isPK) primaryKeyField = key;
+            
+            const isPK = colName === determinedPrimaryKeyField;
 
-            properties[key] = {
-                name: key,
+            properties[colName] = {
+                name: colName,
                 type: columnType,
                 isPrimaryKey: isPK,
             };
         }
     }
-     if (!primaryKeyField && dt.schema?.key) { // Fallback if primaryKeyField was not set via iteration
-      primaryKeyField = dt.schema.key;
-      if (properties[primaryKeyField]) {
-        properties[primaryKeyField].isPrimaryKey = true;
-      }
-    }
-
 
     return {
       id: dt.id!,
@@ -286,9 +274,9 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       description: dt.description,
       schema: { 
         properties,
-        primaryKey: dt.schema?.key ? [dt.schema.key] : (primaryKeyField ? [primaryKeyField] : []),
+        primaryKey: determinedPrimaryKeyField ? [determinedPrimaryKeyField] : [],
       },
-      primaryKeyField: primaryKeyField,
+      primaryKeyField: determinedPrimaryKeyField,
     };
   } catch (error: any) {
     console.error(`Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
@@ -302,7 +290,7 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
   try {
     const result = await architectApi.getFlowsDatatableRows(dataTableId, { 
       pageSize: 200, 
-      showbrief: !showEmptyFields // showbrief=false returns all fields. true returns only key.
+      showbrief: !showEmptyFields 
     });
     return result.entities || []; 
   } catch (error: any) {
@@ -345,3 +333,5 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
         throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
 }
+
+    
