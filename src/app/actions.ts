@@ -211,8 +211,8 @@ export interface DataTableColumn {
 export interface DataTableSchema {
   properties: Record<string, DataTableColumn>; 
   primaryKey?: string[]; 
-  required?: string[]; // Added for fallback
-  key?: string; // Explicitly define 'key' property if it exists on schema
+  required?: string[]; 
+  key?: string; 
 }
 
 export interface DataTableRow {
@@ -244,59 +244,53 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
   await getAuthenticatedClient();
   const architectApi = new platformClient.ArchitectApi();
   try {
-    // Cast to 'any' for expand parameter if type issues persist with SDK version.
     const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); 
     
     const properties: Record<string, DataTableColumn> = {};
     let determinedPrimaryKeyField: string | undefined = undefined;
-    const dtSchema = dt.schema as DataTableSchema | undefined; // Cast for easier access
+    const dtSchema = dt.schema as DataTableSchema | undefined; 
 
-    // --- Primary Key Determination ---
     if (dtSchema) {
-      // Attempt 1: Use schema.key (preferred method)
-      if (typeof dtSchema.key === 'string' && dtSchema.key.trim().length > 0) {
+      if (Object.prototype.hasOwnProperty.call(dtSchema, 'key') && typeof dtSchema.key === 'string' && dtSchema.key.trim().length > 0) {
         determinedPrimaryKeyField = dtSchema.key.trim();
         console.log(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - Primary key FOUND via schema.key: '${determinedPrimaryKeyField}'`);
       } else {
         if (Object.prototype.hasOwnProperty.call(dtSchema, 'key')) {
-            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.key is present but invalid (empty, null, or not a string). Value: `, dtSchema.key);
+            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.key is present but invalid. Value: `, dtSchema.key);
         } else {
             console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.key property is MISSING from API response.`);
         }
 
-        // Attempt 2: Fallback to schema.required (if it contains exactly one field)
         if (Array.isArray(dtSchema.required) && 
             dtSchema.required.length === 1 &&
             typeof dtSchema.required[0] === 'string' &&
             dtSchema.required[0].trim().length > 0) {
           
           const potentialPkFromRequired = dtSchema.required[0].trim();
-          // Ensure this potential PK actually exists in properties
           if (dtSchema.properties && Object.prototype.hasOwnProperty.call(dtSchema.properties, potentialPkFromRequired)) {
             determinedPrimaryKeyField = potentialPkFromRequired;
-            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - Primary key FALLBACK to schema.required (single entry): '${determinedPrimaryKeyField}'. API should ideally provide schema.key.`);
+            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - Primary key FALLBACK to schema.required (single entry): '${determinedPrimaryKeyField}'.`);
           } else {
-            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.required contains '${potentialPkFromRequired}', but it's NOT a defined property in schema.properties. Cannot use as PK.`);
+            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.required contains '${potentialPkFromRequired}', but it's NOT a defined property. Cannot use as PK.`);
           }
         } else {
           if (Object.prototype.hasOwnProperty.call(dtSchema, 'required')) {
-            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.required exists but is not an array with a single string element, or the element is invalid. Value: `, dtSchema.required, ". Cannot use for PK fallback.");
+            console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.required exists but is not usable for PK fallback. Value: `, dtSchema.required);
           } else {
              console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.required property is missing. Cannot use for PK fallback.`);
           }
         }
       }
       if (!determinedPrimaryKeyField) {
-        console.error(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - FAILED to determine primary key after all checks. Editing/Creation will be disabled.`);
+        console.error(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - FAILED to determine primary key.`);
       }
     } else {
-      console.error(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - NO SCHEMA information returned by the API. Cannot determine primary key.`);
+      console.error(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - NO SCHEMA information returned by the API.`);
     }
-    // --- End Primary Key Determination ---
         
     if (dtSchema?.properties) {
         for (const [colName, colDefinitionUntyped] of Object.entries(dtSchema.properties)) {
-            const colDefinition = colDefinitionUntyped as {type: string | {type: string}}; // Type assertion
+            const colDefinition = colDefinitionUntyped as {type: string | {type: string}}; 
             let columnType = 'string'; 
             if (typeof colDefinition.type === 'string') {
                 columnType = colDefinition.type;
@@ -321,7 +315,6 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       schema: { 
         properties,
         primaryKey: determinedPrimaryKeyField ? [determinedPrimaryKeyField] : [],
-        // Keep other schema fields if needed, or define a stricter DataTableSchema type
         key: dtSchema?.key, 
         required: dtSchema?.required,
       },
@@ -360,6 +353,7 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
         throw new Error(`Cannot add row: Primary key field "${dtDetails.primaryKeyField}" must have a value.`);
     }
     const body = { ...rowData };
+    console.log(`[actions.ts] addDataTableRow: Adding row to table ${dataTableId} with key ${rowKey} and data:`, JSON.stringify(body, null, 2));
     try {
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
         return newRow as DataTableRow; 
@@ -378,11 +372,12 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
 export async function updateDataTableRow(dataTableId: string, rowId: string, rowData: DataTableRow): Promise<DataTableRow> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
+    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId} with data:`, JSON.stringify(rowData, null, 2));
     try {
         const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, rowData);
         return updatedRow as DataTableRow;
     } catch (error: any) {
-        console.error(`[actions.ts] updateDataTableRow: Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message);
+        console.error(`[actions.ts] updateDataTableRow: Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message, error);
         let details = error.body?.message || error.message;
         if (error.body?.details?.[0]?.errorMessage) {
             details += ` (${error.body.details[0].errorMessage})`;

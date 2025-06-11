@@ -188,31 +188,35 @@ export default function DataTablesPage() {
 
   const handleSaveEdit = () => {
     if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.primaryKeyField) {
-      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key).", variant: "destructive" });
+      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, or primary key field definition).", variant: "destructive" });
       return;
     }
     
-    const rowDataPayload: Partial<DataTableRow> = { ...editedRowData };
+    // Create a payload for update, excluding the primary key field itself from the body.
+    // The row is identified by 'editingRowId' in the URL.
+    const { [dataTableDetails.primaryKeyField]: _pkValue, ...dataFieldsToSend } = editedRowData;
 
-    for (const key in rowDataPayload) {
-      if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
-        if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
-          rowDataPayload[key] = null;
+    const payloadForUpdate: DataTableRow = {};
+    for (const key in dataFieldsToSend) {
+      if (Object.prototype.hasOwnProperty.call(dataFieldsToSend, key)) {
+        let value = (dataFieldsToSend as any)[key];
+        if (typeof value === 'number' && Number.isNaN(value)) {
+          payloadForUpdate[key] = null; // Convert NaN numbers to null
+        } else {
+          payloadForUpdate[key] = value;
         }
       }
     }
-        
-    rowDataPayload[dataTableDetails.primaryKeyField] = editingRowId;
-
+    
+    console.log("[DataTablesPage] Payload for updateDataTableRow (PK excluded from body):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
-        await updateDataTableRow(selectedTableId, editingRowId, rowDataPayload as DataTableRow);
+        await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate);
         toast({ title: "Row Updated", description: "Successfully updated the row." });
         fetchDataForTable(selectedTableId); 
         handleCancelEdit(); 
-      } catch (error: any)
-      {
+      } catch (error: any) {
         toast({
           title: "Error Updating Row",
           description: error.message || "Could not update the row.",
@@ -233,10 +237,10 @@ export default function DataTablesPage() {
       if (colSchema?.type === 'boolean' || (colSchema?.type === 'string' && (String(initialData[colName]).toLowerCase() === 'true' || String(initialData[colName]).toLowerCase() === 'false'))) {
         initialData[colName] = false; // Default booleans to false
       } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
-        initialData[colName] = null; // Default numbers to null or handle as needed
+        initialData[colName] = null; 
       }
       else {
-        initialData[colName] = ''; // Default others to empty string
+        initialData[colName] = ''; 
       }
     });
     setNewRowData(initialData);
@@ -252,7 +256,6 @@ export default function DataTablesPage() {
     if (!open) {
       handleCancelCreate();
     } else {
-      // Logic for opening, potentially handled by onOpenAutoFocus or similar
       setIsCreateDialogOpen(true);
     }
   };
@@ -440,12 +443,15 @@ export default function DataTablesPage() {
                               {orderedColumnNames.map(colName => {
                                 const colSchema = getColumnSchema(colName);
                                 const cellValue = row[colName];
-                                const isActualBooleanSchema = colSchema?.type === 'boolean';
-                                const isStringRepresentingBoolean = typeof cellValue === 'string' && (cellValue.toLowerCase() === 'true' || cellValue.toLowerCase() === 'false');
                                 
-                                let displayAsCheckbox = isActualBooleanSchema;
-                                if (!displayAsCheckbox && colSchema?.type === 'string' && isStringRepresentingBoolean) {
+                                let displayAsCheckbox = false;
+                                if (colSchema?.type === 'boolean') {
                                   displayAsCheckbox = true;
+                                } else if (colSchema?.type === 'string') {
+                                  const lowerCellValue = String(cellValue).toLowerCase();
+                                  if (lowerCellValue === 'true' || lowerCellValue === 'false') {
+                                    displayAsCheckbox = true;
+                                  }
                                 }
 
                                 return (
@@ -511,12 +517,15 @@ export default function DataTablesPage() {
                     .map(([colName, colDef]) => {
                       const colSchema = colDef as DataTableColumn;
                       const currentValue = editedRowData?.[colName];
-                      const isActualBooleanSchema = colSchema.type === 'boolean';
-                      const isStringRepresentingBoolean = typeof currentValue === 'string' && (currentValue.toLowerCase() === 'true' || currentValue.toLowerCase() === 'false');
                       
-                      let treatAsBooleanInput = isActualBooleanSchema;
-                      if (!treatAsBooleanInput && colSchema.type === 'string' && isStringRepresentingBoolean) {
+                      let treatAsBooleanInput = false;
+                      if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
+                      } else if (colSchema.type === 'string') {
+                        const lowerCurrentValue = String(currentValue).toLowerCase();
+                        if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
+                          treatAsBooleanInput = true;
+                        }
                       }
                       
                       return (
@@ -588,12 +597,16 @@ export default function DataTablesPage() {
                       const currentValue = newRowData?.[colName];
                       const isPrimaryKey = colName === dataTableDetails.primaryKeyField;
 
-                      const isActualBooleanSchema = colSchema.type === 'boolean';
-                      const isStringRepresentingBoolean = typeof currentValue === 'string' && (currentValue.toLowerCase() === 'true' || currentValue.toLowerCase() === 'false');
-                      
-                      let treatAsBooleanInput = isActualBooleanSchema;
-                      if (!treatAsBooleanInput && colSchema.type === 'string' && isStringRepresentingBoolean) {
+                      let treatAsBooleanInput = false;
+                      if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
+                      } else if (colSchema.type === 'string') {
+                         // For create, initialize string booleans with actual boolean if desired, or handle input
+                         // Here, we just check type for rendering, assuming `initialData` in `handleOpenCreateDialog` handles default value.
+                        const lowerCurrentValue = String(currentValue).toLowerCase();
+                        if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
+                            treatAsBooleanInput = true;
+                        }
                       }
                       
                       return (
