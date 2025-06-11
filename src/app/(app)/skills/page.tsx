@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { getGenesysUsers, getAllSkills, getUserSkills, updateUserSkills } from '@/app/actions';
 import type { UserStatus, SkillDefinition, UserRoutingSkill, UserRoutingSkillUpdateItem } from '@/app/actions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,15 +10,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from "@/hooks/use-toast";
-import { ListTodo, UserCog, X, PlusCircle, Save } from 'lucide-react';
+import { ListTodo, UserCog, X, PlusCircle, Save, Filter } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
+interface Division {
+  id: string;
+  name: string;
+}
+
 export default function SkillsManagementPage() {
-  const [users, setUsers] = useState<UserStatus[]>([]);
+  const [allUsers, setAllUsers] = useState<UserStatus[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>(undefined);
   const [allSkills, setAllSkills] = useState<SkillDefinition[]>([]);
   const [currentUserSkills, setCurrentUserSkills] = useState<UserRoutingSkill[]>([]);
   const [modifiedSkills, setModifiedSkills] = useState<Map<string, number>>(new Map()); // skillId -> proficiency
+  const [selectedDivisionId, setSelectedDivisionId] = useState<string>('all');
 
   const [isLoadingUsers, startLoadingUsers] = useTransition();
   const [isLoadingAllSkills, startLoadingAllSkills] = useTransition();
@@ -29,7 +35,7 @@ export default function SkillsManagementPage() {
     startLoadingUsers(async () => {
       try {
         const fetchedUsers = await getGenesysUsers();
-        setUsers(fetchedUsers.sort((a, b) => a.name.localeCompare(b.name)));
+        setAllUsers(fetchedUsers.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (error: any) {
         toast({ title: "Error fetching users", description: error.message, variant: "destructive" });
       }
@@ -66,7 +72,36 @@ export default function SkillsManagementPage() {
     }
   }, [selectedUserId]);
 
-  const selectedUser = users.find(u => u.id === selectedUserId);
+  const divisions = useMemo(() => {
+    const allDivs = allUsers.map(user => ({ id: user.divisionId, name: user.divisionName }));
+    const uniqueDivsMap = new Map<string, Division>();
+    allDivs.forEach(div => {
+      if (div.id && div.id !== 'N/A' && !uniqueDivsMap.has(div.id)) {
+        uniqueDivsMap.set(div.id, div);
+      }
+    });
+    return [{ id: 'all', name: 'All Divisions' }, ...Array.from(uniqueDivsMap.values()).sort((a, b) => a.name.localeCompare(b.name))];
+  }, [allUsers]);
+
+  const filteredUsersForSelection = useMemo(() => {
+    if (selectedDivisionId === 'all') {
+      return allUsers;
+    }
+    return allUsers.filter(user => user.divisionId === selectedDivisionId);
+  }, [allUsers, selectedDivisionId]);
+
+  const handleDivisionChange = (divisionId: string) => {
+    setSelectedDivisionId(divisionId);
+    // If the currently selected user is not in the newly selected division, deselect the user
+    if (selectedUserId) {
+      const currentUser = allUsers.find(u => u.id === selectedUserId);
+      if (currentUser && divisionId !== 'all' && currentUser.divisionId !== divisionId) {
+        setSelectedUserId(undefined);
+      }
+    }
+  };
+  
+  const selectedUser = allUsers.find(u => u.id === selectedUserId);
 
   const handleSaveSkills = () => {
     if (!selectedUserId) return;
@@ -89,8 +124,12 @@ export default function SkillsManagementPage() {
   };
   
   const handleProficiencyChange = (skillId: string, proficiency: number) => {
-    const newProficiency = Math.max(1, Math.min(5, proficiency)); // Clamp between 1 and 5
-    setModifiedSkills(new Map(modifiedSkills).set(skillId, newProficiency));
+    const newProficiency = Math.max(0, Math.min(5, proficiency)); // Clamp between 0 and 5 (0 for removal conceptually, 1-5 for levels)
+    if (newProficiency === 0) { // If proficiency is set to 0, treat as removal
+        handleRemoveSkill(skillId);
+    } else {
+        setModifiedSkills(new Map(modifiedSkills).set(skillId, newProficiency));
+    }
   };
 
   const handleAddSkill = (skillId: string) => {
@@ -106,7 +145,6 @@ export default function SkillsManagementPage() {
   };
   
   const availableSkillsToAdd = allSkills.filter(s => !modifiedSkills.has(s.id));
-
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 flex flex-col items-center selection:bg-primary/30 selection:text-primary-foreground">
@@ -129,24 +167,53 @@ export default function SkillsManagementPage() {
               <UserCog className="w-6 h-6 text-accent" />
               Select User
             </CardTitle>
-            <CardDescription>Choose a user to view and manage their skills.</CardDescription>
+            <CardDescription>Filter by division, then choose a user to manage their skills.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {isLoadingUsers ? (
-              <Skeleton className="h-10 w-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
             ) : (
-              <Select onValueChange={setSelectedUserId} value={selectedUserId}>
-                <SelectTrigger aria-label="Select user">
-                  <SelectValue placeholder="Select a user..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name} ({user.divisionName})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <Label htmlFor="division-filter">Filter by Division</Label>
+                    <Select value={selectedDivisionId} onValueChange={handleDivisionChange}>
+                      <SelectTrigger id="division-filter" aria-label="Filter by division">
+                        <SelectValue placeholder="Filter by division..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {divisions.map(division => (
+                          <SelectItem key={division.id} value={division.id}>
+                            {division.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="user-select">Select User</Label>
+                    <Select onValueChange={setSelectedUserId} value={selectedUserId} disabled={filteredUsersForSelection.length === 0}>
+                      <SelectTrigger id="user-select" aria-label="Select user">
+                        <SelectValue placeholder="Select a user..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredUsersForSelection.length > 0 ? (
+                          filteredUsersForSelection.map(user => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name} ({user.divisionName})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-4 text-sm text-muted-foreground">No users in selected division.</div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -156,7 +223,7 @@ export default function SkillsManagementPage() {
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle>Current Skills for {selectedUser?.name || 'User'}</CardTitle>
-                <CardDescription>Manage proficiencies or remove skills.</CardDescription>
+                <CardDescription>Manage proficiencies (1-5) or remove skills.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {isLoadingUserSkills ? (
@@ -176,14 +243,22 @@ export default function SkillsManagementPage() {
                         <div className="flex items-center gap-2">
                           <Input
                             type="number"
-                            min="1"
+                            min="1" // Proficiency should be between 1 and 5
                             max="5"
                             value={proficiency}
                             onChange={(e) => handleProficiencyChange(skillId, parseInt(e.target.value, 10))}
                             className="w-20 h-9 text-center"
                             aria-label={`Proficiency for ${skillDefinition?.name}`}
+                            disabled={isUpdatingUserSkills}
                           />
-                          <Button variant="ghost" size="icon" onClick={() => handleRemoveSkill(skillId)} className="text-destructive hover:text-destructive/80">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleRemoveSkill(skillId)} 
+                            className="text-destructive hover:text-destructive/80"
+                            disabled={isUpdatingUserSkills}
+                            title="Remove Skill"
+                            >
                             <X className="w-5 h-5" />
                             <span className="sr-only">Remove Skill</span>
                           </Button>
@@ -204,7 +279,7 @@ export default function SkillsManagementPage() {
                 {isLoadingAllSkills ? (
                   <Skeleton className="h-10 w-full" />
                 ) : availableSkillsToAdd.length === 0 ? (
-                    <p className="text-muted-foreground">All available skills are already assigned or selected.</p>
+                    <p className="text-muted-foreground">All available skills are already assigned or selected for this user.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {availableSkillsToAdd.map(skill => (
@@ -213,6 +288,7 @@ export default function SkillsManagementPage() {
                         variant="outline"
                         onClick={() => handleAddSkill(skill.id)}
                         className="justify-start gap-2"
+                        disabled={isUpdatingUserSkills}
                       >
                         <PlusCircle className="w-5 h-5 text-green-600" />
                         {skill.name}
@@ -235,4 +311,3 @@ export default function SkillsManagementPage() {
     </div>
   );
 }
-
