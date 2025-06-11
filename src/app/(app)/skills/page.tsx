@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
-import { getGenesysUsers, getAllSkills, getUserSkills, updateUserSkills } from '../actions';
-import type { UserStatus, SkillDefinition, UserRoutingSkill, UserRoutingSkillUpdateItem } from '../actions';
+import { getGenesysUsers, getAllSkills, getUserSkills, updateUserSkills } from '@/app/actions';
+import type { UserStatus, SkillDefinition, UserRoutingSkill, UserRoutingSkillUpdateItem } from '@/app/actions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
