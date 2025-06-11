@@ -247,11 +247,22 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const properties: Record<string, DataTableColumn> = {};
     let determinedPrimaryKeyField: string | undefined = undefined;
 
-    if (dt.schema && typeof dt.schema.key === 'string') {
-      const trimmedKey = dt.schema.key.trim();
-      if (trimmedKey !== '') {
-        determinedPrimaryKeyField = trimmedKey;
-      }
+    // Refined primary key detection
+    if (dt.schema && Object.prototype.hasOwnProperty.call(dt.schema, 'key')) {
+        if (typeof dt.schema.key === 'string') {
+            const trimmedKey = dt.schema.key.trim();
+            if (trimmedKey.length > 0) {
+                determinedPrimaryKeyField = trimmedKey;
+            } else {
+                console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} has an empty 'key' in schema.`);
+            }
+        } else if (dt.schema.key !== null && dt.schema.key !== undefined) {
+             console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} has a 'key' in schema, but it's not a string. Type: ${typeof dt.schema.key}`);
+        }
+    } else if (dt.schema) {
+        console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} schema does not have a 'key' property.`);
+    } else {
+        console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} has no schema information returned by the API.`);
     }
         
     if (dt.schema?.properties) {
@@ -376,8 +387,8 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
       pageSize: 200,
       pageNumber: 1,
       state: 'active',
-      name: '%', // Wildcard to fetch all active queues matching the state
-      expand: ['division'], // Expand to get division details
+      name: '%', 
+      expand: ['division'], 
     });
     activeQueuesEntities = queuesResponse.entities || [];
     console.log(`[actions.ts] getActiveQueues: Initial fetch found ${activeQueuesEntities.length} queues from API. Details: ${JSON.stringify(activeQueuesEntities.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
