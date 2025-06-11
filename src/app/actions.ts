@@ -54,7 +54,7 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     client.setEnvironment(regionHost);
     try {
       await client.loginClientCredentialsGrant(clientId, clientSecret);
-      console.log('[actions.ts] getAuthenticatedClient: Successfully authenticated with Genesys Cloud API.');
+      // console.log('[actions.ts] getAuthenticatedClient: Successfully authenticated with Genesys Cloud API.');
     } catch (authError: any) {
       console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud authentication failed:', authError.message || authError);
       let errorMessage = 'Genesys Cloud authentication failed.';
@@ -95,7 +95,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     }));
     return mappedUsers;
   } catch (error: any) {
-    console.error('[actions.ts] getGenesysUsers: Error fetching or processing Genesys Cloud user data:', error.body || error.message, error);
+    console.error('[actions.ts] getGenesysUsers: Error fetching or processing Genesys Cloud user data:', error.body || error.message);
     let detailedErrorMessage = 'An unknown error occurred while fetching user data.';
      if (error.body && error.body.message) {
         detailedErrorMessage = error.body.message;
@@ -308,7 +308,7 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
 export async function addDataTableRow(dataTableId: string, rowData: DataTableRow): Promise<DataTableRow> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
-    const dtDetails = await getDataTableDetails(dataTableId); // Fetch schema to find PK
+    const dtDetails = await getDataTableDetails(dataTableId); 
     if (!dtDetails.primaryKeyField) {
       throw new Error(`Cannot add row: Primary key for DataTable ${dataTableId} is not defined or could not be determined.`);
     }
@@ -388,9 +388,12 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
     console.log(`[actions.ts] getQueueObservations: Found ${activeQueues.length} active queues.`);
   } catch (error: any) {
     console.error('[actions.ts] getQueueObservations: Error fetching active queues:', error.body || error.message);
+    // If fetching the list of active queues fails, it should throw an error, as there's nothing to show.
     throw new Error(`Failed to retrieve active queues from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
   }
 
+  // If no active queues are found at all, return an empty array.
+  // The frontend will then display the "No Queue Data Available" message.
   if (activeQueues.length === 0) {
     console.warn('[actions.ts] getQueueObservations: No queues found with state "active". This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
     return [];
@@ -425,6 +428,7 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
   };
 
   try {
+    // Only proceed if there are active queues to observe
     if (activeQueues.length > 0) {
       const observationResult: any = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery);
       if (observationResult && observationResult.results) {
@@ -447,18 +451,24 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
             });
           }
         });
-        console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${observationResult.results.length} queues.`);
+        console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${observationResult.results.length} queues that had metrics.`);
       } else {
-         console.warn('[actions.ts] getQueueObservations: No observation data returned from analytics query, or results were empty. Queues will be shown with default 0 metrics.');
+         console.warn('[actions.ts] getQueueObservations: No observation data returned from analytics query, or results were empty. Active queues will be shown with default 0 metrics.');
       }
     }
   } catch (error: any) {
+    // If fetching metrics fails, log the error but DO NOT re-throw.
+    // This allows the function to proceed and return the list of active queues found earlier,
+    // with their metrics defaulted to 0.
     console.error('[actions.ts] getQueueObservations: Error fetching queue observation metrics:', error.body || error.message);
-    // Do not throw an error here; allow returning queues with default 0 metrics
-    console.warn('[actions.ts] getQueueObservations: Proceeding to return active queues with default 0 metrics due to an error in fetching live observation data.');
+    console.warn('[actions.ts] getQueueObservations: Proceeding to return active queues with default 0 metrics due to an error in fetching live observation data for them.');
   }
 
+  // This will return all queues that were initially identified as 'active',
+  // with metrics populated if available, or defaulted to 0 otherwise.
   const allQueuesWithData = Array.from(queueDataMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  console.log(`[actions.ts] getQueueObservations: Returning ${allQueuesWithData.length} total active queues (metrics may be defaulted if live data was unavailable).`);
+  console.log(`[actions.ts] getQueueObservations: Returning ${allQueuesWithData.length} total active queues (metrics may be defaulted if live data was unavailable for some/all).`);
   return allQueuesWithData;
 }
+
+    
