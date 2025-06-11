@@ -8,7 +8,7 @@ import {
   getDataTables,
   updateDataTableRow,
 } from '@/app/actions';
-import type { DataTable, DataTableDetails, DataTableRow } from '@/app/actions';
+import type { DataTable, DataTableDetails, DataTableRow, DataTableColumn } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -216,6 +216,10 @@ export default function DataTablesPage() {
 
   const isLoadingCurrentTableData = isLoadingDetails || isLoadingRows;
   const currentTableName = dataTableDetails?.name || "the selected table";
+  
+  const getColumnSchema = (colName: string): DataTableColumn | undefined => {
+    return dataTableDetails?.schema?.properties?.[colName];
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 flex flex-col items-center selection:bg-primary/30 selection:text-primary-foreground">
@@ -315,7 +319,7 @@ export default function DataTablesPage() {
                           >
                             {colName}
                             <span className="block text-xs text-muted-foreground font-normal">
-                              ({dataTableDetails?.schema.properties[colName]?.type || 'unknown'})
+                              ({getColumnSchema(colName)?.type || 'unknown'})
                             </span>
                           </TableHead>
                         ))}
@@ -343,17 +347,29 @@ export default function DataTablesPage() {
                           const currentPkValue = dataTableDetails?.primaryKeyField ? String(row[dataTableDetails.primaryKeyField]) : `row-${rowIndex}`;
                           return (
                             <TableRow key={currentPkValue}>
-                              {orderedColumnNames.map(colName => (
-                                <TableCell key={`cell-${rowIndex}-${colName}`} className={colName === dataTableDetails?.primaryKeyField ? 'font-semibold text-primary/80' : ''}>
-                                  {dataTableDetails?.schema.properties[colName]?.type === 'boolean' ? (
-                                    <Checkbox checked={!!row[colName]} disabled aria-label={String(row[colName])} />
-                                  ) : row[colName] === null || row[colName] === undefined ? (
-                                    <span className="text-muted-foreground italic">empty</span>
-                                  ) : (
-                                    String(row[colName])
-                                  )}
-                                </TableCell>
-                              ))}
+                              {orderedColumnNames.map(colName => {
+                                const colSchema = getColumnSchema(colName);
+                                const cellValue = row[colName];
+                                const isActualBooleanSchema = colSchema?.type === 'boolean';
+                                const isStringRepresentingBoolean = typeof cellValue === 'string' && (cellValue.toLowerCase() === 'true' || cellValue.toLowerCase() === 'false');
+                                
+                                let displayAsCheckbox = isActualBooleanSchema;
+                                if (!displayAsCheckbox && colSchema?.type === 'string' && isStringRepresentingBoolean) {
+                                  displayAsCheckbox = true;
+                                }
+
+                                return (
+                                  <TableCell key={`cell-${rowIndex}-${colName}`} className={colName === dataTableDetails?.primaryKeyField ? 'font-semibold text-primary/80' : ''}>
+                                    {displayAsCheckbox ? (
+                                      <Checkbox checked={String(cellValue).toLowerCase() === 'true'} disabled aria-label={String(cellValue)} />
+                                    ) : cellValue === null || cellValue === undefined ? (
+                                      <span className="text-muted-foreground italic">empty</span>
+                                    ) : (
+                                      String(cellValue)
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
                               <TableCell className="text-right">
                                 <Button 
                                   variant="ghost" 
@@ -386,7 +402,7 @@ export default function DataTablesPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
-                {editedRowData && dataTableDetails?.primaryKeyField && dataTableDetails.schema.properties[dataTableDetails.primaryKeyField] && (
+                {editedRowData && dataTableDetails?.primaryKeyField && getColumnSchema(dataTableDetails.primaryKeyField) && (
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor={dataTableDetails.primaryKeyField} className="text-right col-span-1 font-semibold">
                             {dataTableDetails.primaryKeyField} (Key)
@@ -401,43 +417,55 @@ export default function DataTablesPage() {
                   Object.entries(dataTableDetails.schema.properties)
                     .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) 
                     .sort(([aName], [bName]) => aName.localeCompare(bName)) 
-                    .map(([colName, colSchema]) => (
-                      <div className="grid grid-cols-4 items-center gap-4" key={colName}>
-                        <Label htmlFor={colName} className="text-right col-span-1">
-                          {colName} ({colSchema.type})
-                        </Label>
-                        <div className="col-span-3">
-                          {colSchema.type === 'boolean' ? (
-                            <Checkbox
-                              id={colName}
-                              checked={editedRowData?.[colName] as boolean ?? false}
-                              onCheckedChange={(checked) => handleInputChange(colName, !!checked)}
-                              disabled={isSubmitting}
-                              aria-label={`Edit ${colName}`}
-                            />
-                          ) : colSchema.type === 'integer' || colSchema.type === 'number' ? (
-                            <Input
-                              id={colName}
-                              type="number"
-                              value={editedRowData?.[colName] === null || editedRowData?.[colName] === undefined ? '' : String(editedRowData?.[colName])}
-                              onChange={(e) => handleInputChange(colName, e.target.value === '' ? null : Number(e.target.value))}
-                              className="h-9"
-                              disabled={isSubmitting}
-                              aria-label={`Edit ${colName}`}
-                            />
-                          ) : (
-                            <Input
-                              id={colName}
-                              value={editedRowData?.[colName] as string ?? ''}
-                              onChange={(e) => handleInputChange(colName, e.target.value)}
-                              className="h-9"
-                              disabled={isSubmitting}
-                              aria-label={`Edit ${colName}`}
-                            />
-                          )}
+                    .map(([colName, colDef]) => {
+                      const colSchema = colDef as DataTableColumn; // Cast for easier access
+                      const currentValue = editedRowData?.[colName];
+                      const isActualBooleanSchema = colSchema.type === 'boolean';
+                      const isStringRepresentingBoolean = typeof currentValue === 'string' && (currentValue.toLowerCase() === 'true' || currentValue.toLowerCase() === 'false');
+                      
+                      let treatAsBooleanInput = isActualBooleanSchema;
+                      if (!treatAsBooleanInput && colSchema.type === 'string' && isStringRepresentingBoolean) {
+                        treatAsBooleanInput = true;
+                      }
+                      
+                      return (
+                        <div className="grid grid-cols-4 items-center gap-4" key={colName}>
+                          <Label htmlFor={colName} className="text-right col-span-1">
+                            {colName} ({colSchema.type})
+                          </Label>
+                          <div className="col-span-3">
+                            {treatAsBooleanInput ? (
+                              <Checkbox
+                                id={colName}
+                                checked={String(currentValue).toLowerCase() === 'true'}
+                                onCheckedChange={(checked) => handleInputChange(colName, !!checked)} // Sends actual boolean back
+                                disabled={isSubmitting}
+                                aria-label={`Edit ${colName}`}
+                              />
+                            ) : colSchema.type === 'integer' || colSchema.type === 'number' ? (
+                              <Input
+                                id={colName}
+                                type="number"
+                                value={currentValue === null || currentValue === undefined ? '' : String(currentValue)}
+                                onChange={(e) => handleInputChange(colName, e.target.value === '' ? null : Number(e.target.value))}
+                                className="h-9"
+                                disabled={isSubmitting}
+                                aria-label={`Edit ${colName}`}
+                              />
+                            ) : (
+                              <Input
+                                id={colName}
+                                value={currentValue as string ?? ''}
+                                onChange={(e) => handleInputChange(colName, e.target.value)}
+                                className="h-9"
+                                disabled={isSubmitting}
+                                aria-label={`Edit ${colName}`}
+                              />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
               </div>
               <DialogFooter>
                 <DialogClose asChild>
