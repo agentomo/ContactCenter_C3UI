@@ -22,7 +22,7 @@ interface GenesysUserTableProps {
   isLoading: boolean;
 }
 
-type SortableColumn = 'name' | 'divisionName' | 'status' | 'extension';
+type SortableColumn = 'name' | 'id' | 'divisionName' | 'status' | 'extension';
 type SortDirection = 'asc' | 'desc';
 
 interface SortConfig {
@@ -46,10 +46,13 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         } else if (sortConfig.key === 'extension') {
             aValue = a.extension?.toLowerCase() || '';
             bValue = b.extension?.toLowerCase() || '';
+        } else if (sortConfig.key === 'id') {
+            aValue = a.id.toLowerCase();
+            bValue = b.id.toLowerCase();
         }
          else {
-          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'id' | 'divisionId'>] as string)?.toLowerCase() || '';
-          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'id' | 'divisionId'>] as string)?.toLowerCase() || '';
+          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId'>] as string)?.toLowerCase() || '';
+          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId'>] as string)?.toLowerCase() || '';
         }
 
 
@@ -89,7 +92,7 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
   const renderHeader = (label: string, columnKey?: SortableColumn, fixedWidth?: string) => (
     <TableHead
         className={cn(
-            "font-semibold text-sm", // Changed from font-headline text-base
+            "font-semibold text-sm", 
             columnKey && "cursor-pointer hover:bg-muted/50 transition-colors",
             fixedWidth && `w-[${fixedWidth}]`
         )}
@@ -110,17 +113,19 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              {renderHeader('Name', 'name', '25%')}
-              {renderHeader('Division', 'divisionName', '20%')}
-              {renderHeader('Status', 'status', '15%')}
+              {renderHeader('Name', 'name', '20%')}
+              {renderHeader('User ID', 'id', '20%')}
+              {renderHeader('Division', 'divisionName', '15%')}
+              {renderHeader('Status', 'status', '10%')}
               {renderHeader('Extension', 'extension', '10%')}
-              {renderHeader('Skills', undefined, '30%')}
+              {renderHeader('Skills', undefined, '25%')}
             </TableRow>
           </TableHeader>
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={i} className="hover:bg-muted/50">
                 <TableCell><Skeleton className="h-5 w-3/4 rounded" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-full rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-3/4 rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-1/2 rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-1/2 rounded" /></TableCell>
@@ -147,17 +152,19 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
       <Table className="min-w-full">
         <TableHeader>
           <TableRow>
-            {renderHeader('Name', 'name', '25%')}
-            {renderHeader('Division', 'divisionName', '20%')}
-            {renderHeader('Status', 'status', '15%')}
+            {renderHeader('Name', 'name', '20%')}
+            {renderHeader('User ID', 'id', '20%')}
+            {renderHeader('Division', 'divisionName', '15%')}
+            {renderHeader('Status', 'status', '10%')}
             {renderHeader('Extension', 'extension', '10%')}
-            {renderHeader('Skills', undefined, '30%')}
+            {renderHeader('Skills', undefined, '25%')}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedUsers.map((user) => (
             <TableRow key={user.id} className="hover:bg-muted/50 transition-colors text-sm">
               <TableCell className="font-medium py-2.5">{user.name}</TableCell>
+              <TableCell className="py-2.5 text-xs">{user.id}</TableCell>
               <TableCell className="py-2.5">{user.divisionName}</TableCell>
               <TableCell className="py-2.5">
                 <StatusIndicator status={user.status} />
@@ -183,4 +190,3 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     </div>
   );
 }
-
