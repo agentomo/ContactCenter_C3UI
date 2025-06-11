@@ -192,26 +192,30 @@ export default function DataTablesPage() {
       return;
     }
     
-    // Create a payload for update, excluding the primary key field itself from the body.
-    // The row is identified by 'editingRowId' in the URL.
-    const { [dataTableDetails.primaryKeyField]: _pkValue, ...dataFieldsToSend } = editedRowData;
-
+    // Prepare the payload. This will now include ALL fields from editedRowData,
+    // including the primary key field.
     const payloadForUpdate: DataTableRow = {};
-    for (const key in dataFieldsToSend) {
-      if (Object.prototype.hasOwnProperty.call(dataFieldsToSend, key)) {
-        let value = (dataFieldsToSend as any)[key];
-        if (typeof value === 'number' && Number.isNaN(value)) {
-          payloadForUpdate[key] = null; // Convert NaN numbers to null
-        } else {
-          payloadForUpdate[key] = value;
+    if (editedRowData) { 
+        for (const key in editedRowData) {
+            if (Object.prototype.hasOwnProperty.call(editedRowData, key)) {
+            let value = (editedRowData as any)[key];
+            if (typeof value === 'number' && Number.isNaN(value)) {
+                payloadForUpdate[key] = null; // Convert NaN numbers to null
+            } else {
+                payloadForUpdate[key] = value;
+            }
+            }
         }
-      }
+    } else {
+        toast({ title: "Error", description: "No row data to save.", variant: "destructive" });
+        return;
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (PK excluded from body):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (PK INCLUDED in body this time):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
+        // editingRowId is the value of the primary key, used in the URL path
         await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate);
         toast({ title: "Row Updated", description: "Successfully updated the row." });
         fetchDataForTable(selectedTableId); 
