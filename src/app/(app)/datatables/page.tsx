@@ -8,7 +8,7 @@ import {
   getDataTables,
   updateDataTableRow,
 } from '@/app/actions';
-import type { DataTableDetails, DataTableRow } from '@/app/actions';
+import type { DataTable, DataTableDetails, DataTableRow } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,6 +22,13 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -32,39 +39,37 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from "@/hooks/use-toast";
-import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle } from 'lucide-react';
+import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle, ListFilter } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const TARGET_DATATABLE_NAME = "WFMAbsenceBOT";
-
 export default function DataTablesPage() {
+  const [availableDataTables, setAvailableDataTables] = useState<DataTable[]>([]);
+  const [selectedTableId, setSelectedTableId] = useState<string | undefined>(undefined);
+  
   const [dataTableDetails, setDataTableDetails] = useState<DataTableDetails | null>(null);
   const [dataTableRows, setDataTableRows] = useState<DataTableRow[]>([]);
-  const [targetTableId, setTargetTableId] = useState<string | null>(null);
 
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editedRowData, setEditedRowData] = useState<DataTableRow | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  const [isLoadingTablesList, startLoadingTablesList] = useTransition();
   const [isLoadingDetails, startLoadingDetails] = useTransition();
   const [isLoadingRows, startLoadingRows] = useTransition();
-  const [isLoadingInitialSearch, startLoadingInitialSearch] = useTransition();
   const [isSubmitting, startSubmitting] = useTransition();
 
   useEffect(() => {
-    startLoadingInitialSearch(async () => {
+    startLoadingTablesList(async () => {
       try {
         const allTables = await getDataTables();
-        const target = allTables.find(table => table.name === TARGET_DATATABLE_NAME);
-        if (target) {
-          setTargetTableId(target.id);
-        } else {
-          toast({
-            title: "Error: DataTable Not Found",
-            description: `The DataTable "${TARGET_DATATABLE_NAME}" could not be found. Please check its name and ensure it exists in Genesys Cloud.`,
-            variant: "destructive",
-            duration: 10000,
-          });
+        setAvailableDataTables(allTables.sort((a,b) => a.name.localeCompare(b.name)));
+        if (allTables.length === 0) {
+            toast({
+                title: "No DataTables Found",
+                description: "No DataTables were found in your Genesys Cloud organization, or the application lacks permissions to view them.",
+                variant: "default",
+                duration: 7000,
+            })
         }
       } catch (error: any) {
         toast({
@@ -72,6 +77,7 @@ export default function DataTablesPage() {
           description: error.message || "Could not retrieve list of DataTables.",
           variant: "destructive",
         });
+        setAvailableDataTables([]);
       }
     });
   }, []);
@@ -79,11 +85,13 @@ export default function DataTablesPage() {
   const fetchDataForTable = (tableId: string) => {
     startLoadingDetails(async () => {
       try {
+        setDataTableDetails(null); // Clear previous details
+        setDataTableRows([]); // Clear previous rows
         const details = await getDataTableDetails(tableId);
         setDataTableDetails(details);
       } catch (error: any) {
         toast({
-          title: `Error Fetching Details for ${TARGET_DATATABLE_NAME}`,
+          title: `Error Fetching Details for selected table`,
           description: error.message,
           variant: "destructive",
         });
@@ -97,7 +105,7 @@ export default function DataTablesPage() {
         setDataTableRows(rows);
       } catch (error: any) {
         toast({
-          title: `Error Fetching Rows for ${TARGET_DATATABLE_NAME}`,
+          title: `Error Fetching Rows for selected table`,
           description: error.message,
           variant: "destructive",
         });
@@ -107,18 +115,22 @@ export default function DataTablesPage() {
   };
 
   useEffect(() => {
-    if (targetTableId) {
-      fetchDataForTable(targetTableId);
+    if (selectedTableId) {
+      fetchDataForTable(selectedTableId);
+    } else {
+      setDataTableDetails(null);
+      setDataTableRows([]);
     }
-  }, [targetTableId]);
+  }, [selectedTableId]);
 
   const handleRefresh = () => {
-    if (!targetTableId) {
-      toast({ title: "Cannot Refresh", description: "Target DataTable ID not found.", variant: "destructive"});
+    if (!selectedTableId) {
+      toast({ title: "Cannot Refresh", description: "No DataTable selected.", variant: "default"});
       return;
     };
-    fetchDataForTable(targetTableId);
-    toast({ title: "Data Refreshed", description: `Data for ${TARGET_DATATABLE_NAME} is being updated.` });
+    fetchDataForTable(selectedTableId);
+    const selectedTableName = availableDataTables.find(t => t.id === selectedTableId)?.name || "selected table";
+    toast({ title: "Data Refreshed", description: `Data for ${selectedTableName} is being updated.` });
   };
 
   const orderedColumnNames = useMemo(() => {
@@ -167,8 +179,8 @@ export default function DataTablesPage() {
   };
 
   const handleSaveEdit = () => {
-    if (!targetTableId || !editingRowId || !editedRowData || !dataTableDetails?.primaryKeyField) {
-      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., primary key).", variant: "destructive" });
+    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.primaryKeyField) {
+      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key).", variant: "destructive" });
       return;
     }
     
@@ -187,9 +199,9 @@ export default function DataTablesPage() {
 
     startSubmitting(async () => {
       try {
-        await updateDataTableRow(targetTableId, editingRowId, rowDataPayload as DataTableRow);
+        await updateDataTableRow(selectedTableId, editingRowId, rowDataPayload as DataTableRow);
         toast({ title: "Row Updated", description: "Successfully updated the row." });
-        fetchDataForTable(targetTableId); 
+        fetchDataForTable(selectedTableId); 
         handleCancelEdit(); 
       } catch (error: any)
       {
@@ -202,37 +214,8 @@ export default function DataTablesPage() {
     });
   };
 
-  const isLoading = isLoadingDetails || isLoadingRows || isLoadingInitialSearch;
-
-  if (isLoadingInitialSearch && !targetTableId) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Searching for DataTable "{TARGET_DATATABLE_NAME}"...</p>
-      </div>
-    );
-  }
-
-  if (!targetTableId && !isLoadingInitialSearch) {
-    return (
-      <Card className="w-full max-w-2xl mx-auto mt-10 shadow-lg bg-destructive/10 border-destructive">
-        <CardHeader>
-          <CardTitle className="flex items-center text-destructive-foreground">
-            <AlertTriangle className="h-6 w-6 mr-2" /> DataTable Not Found
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-destructive-foreground/90">
-          <p>The DataTable "<strong>{TARGET_DATATABLE_NAME}</strong>" could not be found in your Genesys Cloud organization.</p>
-          <p className="mt-2">Please verify:</p>
-          <ul className="list-disc list-inside ml-4 mt-1">
-            <li>The DataTable name is correct.</li>
-            <li>The DataTable exists in the expected Genesys Cloud division.</li>
-            <li>The application's OAuth client has permissions to access DataTables.</li>
-          </ul>
-        </CardContent>
-      </Card>
-    );
-  }
+  const isLoadingCurrentTableData = isLoadingDetails || isLoadingRows;
+  const currentTableName = dataTableDetails?.name || "the selected table";
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 flex flex-col items-center selection:bg-primary/30 selection:text-primary-foreground">
@@ -244,17 +227,51 @@ export default function DataTablesPage() {
           </h1>
         </div>
         <p className="text-md sm:text-lg text-muted-foreground font-body max-w-2xl mx-auto">
-          View and manage rows for the Genesys Cloud DataTable.
+          Select a Genesys Cloud DataTable to view and manage its rows.
         </p>
       </header>
 
-      {targetTableId && (
+      <div className="w-full max-w-2xl mb-6">
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <ListFilter className="mr-2 h-5 w-5 text-accent" />
+              Select DataTable
+            </CardTitle>
+            <CardDescription>Choose a DataTable from the list below.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingTablesList ? (
+              <Skeleton className="h-10 w-full" />
+            ) : availableDataTables.length === 0 ? (
+                <p className="text-muted-foreground text-center py-3">
+                    No DataTables found or an error occurred fetching them. Check permissions.
+                </p>
+            ) : (
+              <Select onValueChange={setSelectedTableId} value={selectedTableId} disabled={isLoadingTablesList}>
+                <SelectTrigger aria-label="Select a DataTable">
+                  <SelectValue placeholder="Select a DataTable..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDataTables.map((table) => (
+                    <SelectItem key={table.id} value={table.id}>
+                      {table.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {selectedTableId && (
         <main className="w-full max-w-6xl space-y-6">
           <Card className="shadow-lg">
             <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <CardTitle className="flex items-center">
-                  {isLoadingDetails && !dataTableDetails ? <Skeleton className="h-7 w-48" /> : dataTableDetails?.name || TARGET_DATATABLE_NAME }
+                  {isLoadingDetails && !dataTableDetails ? <Skeleton className="h-7 w-48" /> : dataTableDetails?.name || "Loading..." }
                   {isLoadingDetails && <Loader2 className="h-5 w-5 animate-spin text-primary ml-3" />}
                 </CardTitle>
                 <CardDescription className="mt-1">
@@ -266,14 +283,14 @@ export default function DataTablesPage() {
                 {!dataTableDetails?.primaryKeyField && !isLoadingDetails && dataTableDetails && (
                   <p className="text-xs text-destructive mt-1 font-semibold">
                     Warning: Primary key not identified by the API for this table. Editing will be disabled. 
-                    (Ensure a primary key is set in Genesys Cloud for "{TARGET_DATATABLE_NAME}".)
+                    (Ensure a primary key is set in Genesys Cloud for "{currentTableName}".)
                   </p>
                 )}
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                <Button onClick={handleRefresh} disabled={isLoadingRows || isLoadingDetails || isSubmitting || isEditDialogOpen} variant="default" size="sm">
-                  <RefreshCw className={`mr-2 h-4 w-4 ${(isLoadingRows || isLoadingDetails) ? 'animate-spin' : ''}`} />
-                  {(isLoadingRows || isLoadingDetails) ? 'Refreshing...' : 'Refresh Data'}
+                <Button onClick={handleRefresh} disabled={isLoadingCurrentTableData || isSubmitting || isEditDialogOpen || !selectedTableId} variant="default" size="sm">
+                  <RefreshCw className={`mr-2 h-4 w-4 ${(isLoadingCurrentTableData) ? 'animate-spin' : ''}`} />
+                  {(isLoadingCurrentTableData) ? 'Refreshing...' : 'Refresh Data'}
                 </Button>
               </div>
             </CardHeader>
@@ -285,7 +302,7 @@ export default function DataTablesPage() {
                   <Skeleton className="h-10 w-full" />
                 </>
               ) : !dataTableDetails && !isLoadingDetails ? (
-                <p className="text-center text-muted-foreground py-8">Could not load DataTable details for "{TARGET_DATATABLE_NAME}".</p>
+                <p className="text-center text-muted-foreground py-8">Could not load DataTable details for "{currentTableName}".</p>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -358,7 +375,7 @@ export default function DataTablesPage() {
           <Dialog open={isEditDialogOpen} onOpenChange={handleDialogOpeChange}>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
-                <DialogTitle>Edit Row</DialogTitle>
+                <DialogTitle>Edit Row for {currentTableName}</DialogTitle>
                 <DialogDescription>
                   Modify the fields for the selected row. The primary key cannot be changed.
                 </DialogDescription>
@@ -430,11 +447,16 @@ export default function DataTablesPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-
         </main>
+      )}
+
+      {!selectedTableId && !isLoadingTablesList && availableDataTables.length > 0 && (
+         <div className="text-center text-muted-foreground mt-10">
+            <AlertTriangle className="mx-auto h-12 w-12 text-primary/50 mb-4" />
+            <p className="text-lg">Please select a DataTable from the dropdown above to view its details and rows.</p>
+        </div>
       )}
     </div>
   );
 }
-
     
