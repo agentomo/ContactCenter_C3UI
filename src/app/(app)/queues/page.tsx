@@ -17,23 +17,48 @@ export default function QueuesPage() {
 
   const fetchQueueData = () => {
     startTransition(async () => {
+      let toastId: string | undefined;
       try {
+        // Show initial loading toast
+        const loadingToast = toast({
+          title: "Fetching Queue Data",
+          description: "Please wait...",
+          duration: Infinity, // Keep open until dismissed
+        });
+        toastId = loadingToast.id;
+
         const data = await getQueueObservations();
+        console.log("[QueuesPage] Data received from getQueueObservations:", JSON.stringify(data, null, 2));
+
+        // Dismiss loading toast
+        if (toastId) toast.dismiss(toastId);
+
+        if (data.length === 0) {
+          console.warn("[QueuesPage] getQueueObservations returned an empty array. Displaying 'No Queue Data'.");
+          toast({
+            title: "No Active Queues Found",
+            description: "The Genesys Cloud API returned no active queues matching the application's criteria. Please check queue states and OAuth client permissions in Genesys Cloud.",
+            variant: "default",
+            duration: 10000,
+          });
+        } else {
+          toast({
+            title: "Queue Data Refreshed",
+            description: `Successfully updated ${data.length} queues.`,
+            duration: 3000,
+          });
+        }
         setQueueData(data);
-        if (document.hidden) return;
-        toast({
-          title: "Queue Data Refreshed",
-          description: `Successfully updated ${data.length} queues.`,
-          duration: 3000,
-        });
       } catch (error: any) {
-        console.error('Failed to fetch queue data:', error);
-        if (document.hidden) return;
+        console.error('[QueuesPage] Failed to fetch queue data:', error);
+        if (toastId) toast.dismiss(toastId); // Dismiss loading toast on error
         toast({
-          title: "Queue Data Refresh Error",
-          description: error.message || "Could not fetch queue data. Please try again.",
+          title: "Queue Data Fetch Error",
+          description: error.message || "Could not fetch queue data from Genesys Cloud. Please try again or check server logs.",
           variant: "destructive",
+          duration: 10000,
         });
+        setQueueData([]); // Ensure queueData is empty to show the "No Data" message panel
       }
     });
   };
@@ -97,11 +122,14 @@ export default function QueuesPage() {
           </CardHeader>
           <CardContent className="text-center">
             <p className="text-muted-foreground">
-              No active queues with observation data were found in your Genesys Cloud organization.
+              No active queues with observation data were found in your Genesys Cloud organization for the current application configuration.
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Please ensure there are active queues configured, that they have recent activity (if expecting non-zero metrics),
-              and that the application has the necessary permissions to view queue data.
+              Please ensure there are queues in an 'active' state, that they have recent activity (if expecting non-zero metrics),
+              and that the application's OAuth client has the necessary permissions (e.g., `routing:queue:view`) and division access in Genesys Cloud.
+            </p>
+             <p className="text-xs text-muted-foreground mt-4">
+              Check client-side console (Developer Tools) and server-side logs for more details from the API.
             </p>
           </CardContent>
         </Card>
