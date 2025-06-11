@@ -375,7 +375,8 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    const bodyForApi = { ...rowData }; 
+    // Ensure we are working with a fresh copy for the body
+    const bodyForApi = JSON.parse(JSON.stringify(rowData)); 
 
     console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
     console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(bodyForApi, null, 2));
@@ -419,10 +420,15 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   const routingApi = new platformClient.RoutingApi();
 
   let activeQueuesEntities: any[] = [];
-  const apiOptions = {
+  const apiOptions: {
+    pageSize: number;
+    pageNumber: number;
+    name: string;
+    expand: string[];
+    state?: 'active' | 'inactive' | 'deleted'; // Optional state
+  } = {
     pageSize: 200,
     pageNumber: 1,
-    state: 'active' as 'active' | 'inactive' | 'deleted', // Added type assertion for clarity
     name: '%', 
     expand: ['division'], 
   };
@@ -433,16 +439,14 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
     const queuesResponse = await routingApi.getRoutingQueues(apiOptions);
     activeQueuesEntities = queuesResponse.entities || [];
     console.log(`[actions.ts] getActiveQueues: Initial fetch found ${activeQueuesEntities.length} queues from API.`);
-    // Removed detailed logging of all queue data by default to keep console cleaner. Can be re-added if needed for specific debugging.
-    // console.log(`[actions.ts] getActiveQueues: Details: ${JSON.stringify(activeQueuesEntities.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
 
   } catch (error: any) {
-    console.error('[actions.ts] getActiveQueues: Error fetching active queues:', error.body || error.message);
-    throw new Error(`Failed to retrieve active queues from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
+    console.error('[actions.ts] getActiveQueues: Error fetching queues:', error.body || error.message);
+    throw new Error(`Failed to retrieve queues from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
   }
 
   if (activeQueuesEntities.length === 0) {
-    console.warn('[actions.ts] getActiveQueues: No queues found with state "active" (or visible to OAuth client). This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
+    console.warn('[actions.ts] getActiveQueues: No queues found (or visible to OAuth client). This could be due to no queues being configured, insufficient permissions to list them, or no queues matching other implicit criteria.');
     return [];
   }
 
@@ -456,4 +460,3 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
     
-
