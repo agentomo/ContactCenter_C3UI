@@ -82,7 +82,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     });
 
     if (!userResponse.entities || userResponse.entities.length === 0) {
-      console.log('[actions.ts] getGenesysUsers: No users found or an issue with the API response.');
+      console.warn('[actions.ts] getGenesysUsers: No users found or an issue with the API response.');
       return [];
     }
 
@@ -169,8 +169,6 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
   }));
 
   try {
-    // console.log(`[actions.ts] updateUserSkills: Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
-    
     const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
     
     return (updatedSkillsData.entities || [])
@@ -254,12 +252,11 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       const trimmedKey = dt.schema.key.trim();
       if (trimmedKey !== '') {
         determinedPrimaryKeyField = trimmedKey;
-        // console.log(`[actions.ts] getDataTableDetails: Determined primary key for ${dataTableId} (name: ${dt.name}): '${determinedPrimaryKeyField}'`); // Debug log removed
       } else {
         console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is an empty string after trimming. Original API value: '${dt.schema.key}'`);
       }
     } else if (dt.schema) {
-      console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is not a string or not present. Value: '${dt.schema.key}', Type: ${typeof dt.schema.key}`);
+       console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is not a string or not present. Value: '${dt.schema.key}', Type: ${typeof dt.schema.key}`);
     } else {
        console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema is null or undefined.`);
     }
@@ -314,23 +311,28 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
   }
 }
 
-export async function addDataTableRow(dataTableId: string, rowKey: string, rowData: DataTableRow): Promise<DataTableRow> {
+export async function addDataTableRow(dataTableId: string, rowData: DataTableRow): Promise<DataTableRow> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
+    const dtDetails = await getDataTableDetails(dataTableId); // Fetch schema to find PK
+    if (!dtDetails.primaryKeyField) {
+      throw new Error(`Cannot add row: Primary key for DataTable ${dataTableId} is not defined or could not be determined.`);
+    }
+    const rowKey = rowData[dtDetails.primaryKeyField];
+    if (rowKey === undefined || rowKey === null || String(rowKey).trim() === '') {
+        throw new Error(`Cannot add row: Primary key field "${dtDetails.primaryKeyField}" must have a value.`);
+    }
+
     try {
-        // Ensure the rowKey (primary key) is part of the rowData payload if the API expects it at the top level
-        // For Genesys Cloud, the key is part of the path, and the body is the rest of the data.
-        // However, some APIs might expect the key in the body as well. The SDK usually handles this.
-        // The `postFlowsDatatableRows` creates a new row with an auto-generated key OR the key specified in the body IF the datatable allows it.
-        // For a PUT-like "add or replace", we'd use `putFlowsDatatableRow` with the key.
-        // Here, we are assuming `rowData` includes the primary key field and its value.
-        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData); // rowData should contain the PK field and its value
+        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData);
         return newRow as DataTableRow; 
     } catch (error: any) {
         console.error(`[actions.ts] addDataTableRow: Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
         let details = error.body?.message || error.message;
         if (error.body?.details?.[0]?.errorMessage) {
             details += ` (${error.body.details[0].errorMessage})`;
+        } else if (error.body?.code === 'architect.datatables.key.conflict') {
+            details = `A row with the key "${rowKey}" already exists in DataTable ${dataTableId}.`;
         }
         throw new Error(`Failed to add row to DataTable ${dataTableId}. Details: ${details}`);
     }
@@ -361,131 +363,4 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
         console.error(`[actions.ts] deleteDataTableRow: Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
         throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
-}
-
-
-// --- Queue Observation Types and Actions ---
-export interface QueueObservationData {
-  id: string;
-  name: string;
-  divisionId: string;
-  divisionName: string;
-  onQueueUserCount: number;
-  interactingCount: number;
-  waitingCount: number;
-}
-
-export async function getQueueObservations(): Promise<QueueObservationData[]> {
-  await getAuthenticatedClient();
-  const routingApi = new platformClient.RoutingApi();
-  const analyticsApi = new platformClient.AnalyticsApi();
-
-  let activeQueues: { id: string; name: string; divisionId: string; divisionName: string }[] = [];
-
-  try {
-    const queueResponse = await routingApi.getRoutingQueues({
-      pageSize: 100,
-      pageNumber: 1,
-      state: 'active', // Fetch only active queues
-      expand: ['division'], // Expand to get division info
-    });
-
-    if (!queueResponse.entities || queueResponse.entities.length === 0) {
-      console.log('[actions.ts] getQueueObservations: No queues found with state "active". This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
-      return [];
-    }
-
-    activeQueues = queueResponse.entities.map(q => ({
-      id: q.id!,
-      name: q.name!,
-      divisionId: q.division?.id || 'N/A',
-      divisionName: q.division?.name || 'N/A',
-    }));
-    console.log(`[actions.ts] getQueueObservations: Found ${activeQueues.length} active queues.`);
-
-  } catch (error: any) {
-    console.error('[actions.ts] getQueueObservations: Error fetching active queues:', error.body || error.message, error);
-    let detailedErrorMessage = 'An unknown error occurred while fetching active queues.';
-    if (error.body && error.body.message) {
-      detailedErrorMessage = error.body.message;
-      if (error.body.contextId) detailedErrorMessage += ` (Trace ID: ${error.body.contextId})`;
-    } else if (error.message) {
-      detailedErrorMessage = error.message;
-    }
-    throw new Error(`Failed to retrieve active queues from Genesys Cloud. Details: ${detailedErrorMessage}.`);
-  }
-
-  // Initialize with default values
-  const activeQueuesWithDefaults: QueueObservationData[] = activeQueues.map(q => ({
-    ...q,
-    onQueueUserCount: 0,
-    interactingCount: 0,
-    waitingCount: 0,
-  }));
-
-  if (activeQueues.length === 0) {
-    // This case is already handled by the check after fetching queues,
-    // but included for completeness if the logic were to change.
-    return [];
-  }
-
-  const observationQuery = {
-    filter: {
-      type: 'AND' as const,
-      clauses: [
-        {
-          type: 'OR' as const,
-          predicates: activeQueues.map(q => ({
-            type: 'dimension' as const,
-            dimension: 'queueId' as const,
-            operator: 'matches' as const,
-            value: q.id,
-          })),
-        },
-      ],
-    },
-    metrics: ['oOnQueueUsers', 'oInteracting', 'oWaiting'] as platformClient.ગેમૉડ્યૂલ.त्मुख्य.QueueObservationMetric[],
-  };
-
-  try {
-    const observationResults = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery);
-    let mappedCount = 0;
-
-    if (observationResults.results && observationResults.results.length > 0) {
-      observationResults.results.forEach(result => {
-        const queueId = result.group?.queueId;
-        if (queueId) {
-          const queueIndex = activeQueuesWithDefaults.findIndex(q => q.id === queueId);
-          if (queueIndex !== -1) {
-            mappedCount++;
-            result.data?.forEach(metricData => {
-              const metricName = metricData.metric as (typeof observationQuery.metrics)[number];
-              const value = metricData.stats?.count ?? 0;
-
-              switch (metricName) {
-                case 'oOnQueueUsers':
-                  activeQueuesWithDefaults[queueIndex].onQueueUserCount = value;
-                  break;
-                case 'oInteracting':
-                  activeQueuesWithDefaults[queueIndex].interactingCount = value;
-                  break;
-                case 'oWaiting':
-                  activeQueuesWithDefaults[queueIndex].waitingCount = value;
-                  break;
-              }
-            });
-          }
-        }
-      });
-      console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${mappedCount} of ${activeQueues.length} active queues.`);
-    } else {
-      console.log(`[actions.ts] getQueueObservations: Analytics query returned no observation data for the ${activeQueues.length} active queues. They will be shown with default (0) values.`);
-    }
-    return activeQueuesWithDefaults;
-
-  } catch (metricsError: any) {
-    console.warn(`[actions.ts] getQueueObservations: Error fetching queue observation metrics. Queues will be shown with default (0) values. Details:`, metricsError.body?.message || metricsError.message);
-    // Proceed to return activeQueuesWithDefaults, which will have 0 for metrics
-    return activeQueuesWithDefaults;
-  }
 }
