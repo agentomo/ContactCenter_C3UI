@@ -64,9 +64,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false}
+                        asChild={false} // Ensure Button itself doesn't expect Slot behavior here
                       >
-                        <a>
+                        <a> {/* Explicit anchor for legacyBehavior + passHref pattern */}
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
                         </a>
@@ -103,18 +103,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
 }
 
 // Dummy SidebarMenuButton component used for desktop navigation items.
+// This local version specifically handles the 'asChild' prop from <Link asChild>.
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
 >(({ children, isActive, tooltip, ...props }, ref) => {
-  // Destructure asChild from props and don't pass it to the Button component
+  // Destructure asChild from props (passed by <Link asChild>)
+  // and ensure it's not passed to the underlying ShadCN Button component
   // to prevent the "React does not recognize the `asChild` prop on a DOM element" warning.
   const { asChild, ...restProps } = props; 
   
-  // The Tooltip component is not used here for simplicity in the dummy component,
-  // but in a real scenario, you might want to wrap the Button with Tooltip logic
-  // similar to how it's done in the actual SidebarMenuButton from @/components/ui/sidebar.
-  // For now, we ignore the tooltip prop for this dummy version.
+  // The Tooltip component is not used here for simplicity in this dummy component.
+  // In a real scenario, you might wrap the Button with Tooltip logic.
+  // For now, we ignore the 'tooltip' prop for this dummy version's rendering.
   
   return (
     <Button ref={ref} variant={isActive ? 'secondary' : 'ghost'} {...restProps}>
