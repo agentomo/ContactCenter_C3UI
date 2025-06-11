@@ -22,7 +22,7 @@ interface GenesysUserTableProps {
   isLoading: boolean;
 }
 
-type SortableColumn = 'name' | 'id' | 'divisionName' | 'status' | 'extension';
+type SortableColumn = 'name' | 'email' | 'divisionName' | 'status' | 'extension';
 type SortDirection = 'asc' | 'desc';
 
 interface SortConfig {
@@ -46,13 +46,14 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         } else if (sortConfig.key === 'extension') {
             aValue = a.extension?.toLowerCase() || '';
             bValue = b.extension?.toLowerCase() || '';
-        } else if (sortConfig.key === 'id') {
-            aValue = a.id.toLowerCase();
-            bValue = b.id.toLowerCase();
+        } else if (sortConfig.key === 'email') {
+            aValue = a.email?.toLowerCase() || '';
+            bValue = b.email?.toLowerCase() || '';
         }
          else {
-          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId'>] as string)?.toLowerCase() || '';
-          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId'>] as string)?.toLowerCase() || '';
+          // Handles 'name' and 'divisionName'
+          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId' | 'id'>] as string)?.toLowerCase() || '';
+          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId' | 'id'>] as string)?.toLowerCase() || '';
         }
 
 
@@ -114,11 +115,11 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
           <TableHeader>
             <TableRow>
               {renderHeader('Name', 'name', '20%')}
-              {renderHeader('User ID', 'id', '20%')}
+              {renderHeader('Email / Login', 'email', '25%')}
               {renderHeader('Division', 'divisionName', '15%')}
               {renderHeader('Status', 'status', '10%')}
               {renderHeader('Extension', 'extension', '10%')}
-              {renderHeader('Skills', undefined, '25%')}
+              {renderHeader('Skills', undefined, '20%')}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -153,18 +154,18 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         <TableHeader>
           <TableRow>
             {renderHeader('Name', 'name', '20%')}
-            {renderHeader('User ID', 'id', '20%')}
+            {renderHeader('Email / Login', 'email', '25%')}
             {renderHeader('Division', 'divisionName', '15%')}
             {renderHeader('Status', 'status', '10%')}
             {renderHeader('Extension', 'extension', '10%')}
-            {renderHeader('Skills', undefined, '25%')}
+            {renderHeader('Skills', undefined, '20%')}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedUsers.map((user) => (
             <TableRow key={user.id} className="hover:bg-muted/50 transition-colors text-sm">
               <TableCell className="font-medium py-2.5">{user.name}</TableCell>
-              <TableCell className="py-2.5 text-xs">{user.id}</TableCell>
+              <TableCell className="py-2.5 text-xs">{user.email || <span className="text-xs text-muted-foreground italic">N/A</span>}</TableCell>
               <TableCell className="py-2.5">{user.divisionName}</TableCell>
               <TableCell className="py-2.5">
                 <StatusIndicator status={user.status} />
