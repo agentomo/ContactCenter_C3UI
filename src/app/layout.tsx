@@ -1,12 +1,11 @@
 
 import type {Metadata} from 'next';
 import './globals.css';
-import { Toaster } from "@/components/ui/toaster"; // Import Toaster
-import { Users } from 'lucide-react'; // Changed Icon
+import { Toaster } from "@/components/ui/toaster"; 
 
 export const metadata: Metadata = {
-  title: 'Genesys Status Board',
-  description: 'View the current status and division of your Genesys Cloud users.',
+  title: 'Genesys Tools', // Updated title
+  description: 'View user statuses and manage skills in Genesys Cloud.', // Updated description
 };
 
 export default function RootLayout({
@@ -15,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning> {/* Added suppressHydrationWarning for potential NextUI/Sidebar issues */}
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
