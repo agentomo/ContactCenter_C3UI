@@ -49,16 +49,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
+                <Link href={item.href} asChild>
                   <SidebarMenuButton
-                    asChild
                     isActive={pathname === item.href}
                     tooltip={{ children: item.label, side: 'right', align: 'center' }}
                   >
-                    <a>
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </a>
+                    <item.icon />
+                    <span>{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
@@ -70,3 +67,4 @@ export default function AppLayout({ children }: AppLayoutProps) {
     </SidebarProvider>
   );
 }
+
