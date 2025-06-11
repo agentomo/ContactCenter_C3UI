@@ -245,16 +245,16 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); 
     
     const properties: Record<string, DataTableColumn> = {};
-    // Directly use dt.schema.key as the primary key field name.
-    // If dt.schema.key is null, undefined, or an empty string, primaryKeyField will be undefined.
-    const determinedPrimaryKeyField = dt.schema?.key && dt.schema.key.trim() !== '' ? dt.schema.key.trim() : undefined;
+    // Determine the primary key field from dt.schema.key.
+    // If dt.schema.key is null, undefined, or an empty string (after trimming), primaryKeyField will be undefined.
+    const determinedPrimaryKeyField = dt.schema?.key?.trim() ? dt.schema.key.trim() : undefined;
 
     if (dt.schema?.properties) {
         for (const [colName, colDefinition] of Object.entries(dt.schema.properties as Record<string, {type: string | {type: string}} >)) {
             let columnType = 'string'; // Default to string
             if (typeof colDefinition.type === 'string') {
                 columnType = colDefinition.type;
-            } else if (typeof colDefinition.type === 'object' && typeof colDefinition.type.type === 'string') {
+            } else if (typeof colDefinition.type === 'object' && colDefinition.type?.type === 'string') { // Added null check for colDefinition.type
                  columnType = colDefinition.type.type; 
             }
             
@@ -333,5 +333,6 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
         throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
 }
+    
 
     

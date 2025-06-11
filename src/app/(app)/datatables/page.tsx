@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from "@/hooks/use-toast";
-import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle, PlusCircle } from 'lucide-react';
+import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle } from 'lucide-react'; // Removed PlusCircle for now
 import { Skeleton } from '@/components/ui/skeleton';
 
 const TARGET_DATATABLE_NAME = "CG_SHSV_DynamicPrompt";
@@ -42,8 +42,8 @@ export default function DataTablesPage() {
   const [dataTableRows, setDataTableRows] = useState<DataTableRow[]>([]);
   const [targetTableId, setTargetTableId] = useState<string | null>(null);
 
-  const [editingRowId, setEditingRowId] = useState<string | null>(null); // Stores the PK of the row being edited
-  const [editedRowData, setEditedRowData] = useState<DataTableRow | null>(null); // Stores the data for the form in the dialog
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editedRowData, setEditedRowData] = useState<DataTableRow | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const [isLoadingDetails, startLoadingDetails] = useTransition();
@@ -124,11 +124,23 @@ export default function DataTablesPage() {
   const orderedColumnNames = useMemo(() => {
     if (!dataTableDetails?.schema?.properties) return [];
     const pkField = dataTableDetails.primaryKeyField;
-    const otherColumns = Object.keys(dataTableDetails.schema.properties)
-      .filter(name => name !== pkField)
-      .sort();
-    return pkField ? [pkField, ...otherColumns] : otherColumns;
+    const allColumnNames = Object.keys(dataTableDetails.schema.properties);
+  
+    // Create a sorted list of all column names
+    const sortedAllColumnNames = [...allColumnNames].sort((a, b) => a.localeCompare(b));
+  
+    if (pkField && sortedAllColumnNames.includes(pkField)) {
+      // If pkField exists and is in the list, remove it from its current sorted position
+      // and prepend it to the list.
+      const index = sortedAllColumnNames.indexOf(pkField);
+      sortedAllColumnNames.splice(index, 1); // Remove PK from sorted list
+      return [pkField, ...sortedAllColumnNames]; // Prepend PK
+    }
+    // If no pkField or pkField is not in properties (should not happen if schema is consistent),
+    // return the alphabetically sorted list of all columns.
+    return sortedAllColumnNames;
   }, [dataTableDetails]);
+  
 
   const handleEdit = (row: DataTableRow) => {
     if (!dataTableDetails?.primaryKeyField) {
@@ -167,6 +179,7 @@ export default function DataTablesPage() {
     
     const rowDataPayload: Partial<DataTableRow> = { ...editedRowData };
 
+    // Convert NaN to null for numeric fields before sending
     for (const key in rowDataPayload) {
       if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
         if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
@@ -174,7 +187,10 @@ export default function DataTablesPage() {
         }
       }
     }
-    
+        
+    // Ensure the primary key value is included (though it shouldn't be modified by the form)
+    // The API expects the PK as part of the payload for updates in some cases, or uses rowId path param.
+    // Here, updateDataTableRow uses rowId path param, but including it in payload is often harmless or even required by SDK.
     rowDataPayload[dataTableDetails.primaryKeyField] = editingRowId;
 
 
@@ -254,7 +270,7 @@ export default function DataTablesPage() {
                   {isLoadingDetails && !dataTableDetails ? <Skeleton className="h-4 w-64" /> : dataTableDetails?.description || "No description provided."}
                 </CardDescription>
                  {dataTableDetails?.primaryKeyField && (
-                    <p className="text-xs text-muted-foreground mt-1">Primary Key: <strong>{dataTableDetails.primaryKeyField}</strong></p>
+                    <p className="text-xs text-muted-foreground mt-1">Primary Key: <strong className="text-primary/90">{dataTableDetails.primaryKeyField}</strong></p>
                   )}
                 {!dataTableDetails?.primaryKeyField && !isLoadingDetails && dataTableDetails && (
                   <p className="text-xs text-destructive mt-1 font-semibold">Warning: Primary key not identified. Editing will be disabled.</p>
@@ -282,9 +298,14 @@ export default function DataTablesPage() {
                     <TableHeader>
                       <TableRow>
                         {orderedColumnNames.map(colName => (
-                          <TableHead key={colName} className={colName === dataTableDetails?.primaryKeyField ? 'font-bold text-primary/90' : ''}>
+                          <TableHead 
+                            key={colName} 
+                            className={colName === dataTableDetails?.primaryKeyField ? 'font-bold text-primary/90' : ''}
+                          >
                             {colName}
-                            <span className="block text-xs text-muted-foreground font-normal">({dataTableDetails?.schema.properties[colName]?.type})</span>
+                            <span className="block text-xs text-muted-foreground font-normal">
+                              ({dataTableDetails?.schema.properties[colName]?.type || 'unknown'})
+                            </span>
                           </TableHead>
                         ))}
                         <TableHead className="w-[80px] text-right">Actions</TableHead>
@@ -312,7 +333,7 @@ export default function DataTablesPage() {
                           return (
                             <TableRow key={currentPkValue}>
                               {orderedColumnNames.map(colName => (
-                                <TableCell key={`cell-${rowIndex}-${colName}`}>
+                                <TableCell key={`cell-${rowIndex}-${colName}`} className={colName === dataTableDetails?.primaryKeyField ? 'font-semibold' : ''}>
                                   {typeof row[colName] === 'boolean' ? row[colName] ? 'True' : 'False' :
                                    row[colName] === null || row[colName] === undefined ? <span className="text-muted-foreground italic">empty</span> : String(row[colName])}
                                 </TableCell>
@@ -349,6 +370,19 @@ export default function DataTablesPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+                {/* Display Primary Key Field (Non-Editable) First if it exists */}
+                {editedRowData && dataTableDetails?.primaryKeyField && dataTableDetails.schema.properties[dataTableDetails.primaryKeyField] && (
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor={dataTableDetails.primaryKeyField} className="text-right col-span-1 font-semibold">
+                            {dataTableDetails.primaryKeyField} (Key)
+                        </Label>
+                        <div className="col-span-3 text-sm text-muted-foreground pt-2">
+                            {String(editedRowData[dataTableDetails.primaryKeyField])}
+                        </div>
+                    </div>
+                 )}
+
+                {/* Editable Fields */}
                 {editedRowData && dataTableDetails && dataTableDetails.schema.properties &&
                   Object.entries(dataTableDetails.schema.properties)
                     .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) 
@@ -390,14 +424,6 @@ export default function DataTablesPage() {
                         </div>
                       </div>
                     ))}
-                 {dataTableDetails?.primaryKeyField && editedRowData?.[dataTableDetails.primaryKeyField] && (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right col-span-1 font-semibold">{dataTableDetails.primaryKeyField} (Key)</Label>
-                        <div className="col-span-3 text-sm text-muted-foreground">
-                            {String(editedRowData[dataTableDetails.primaryKeyField])}
-                        </div>
-                    </div>
-                 )}
               </div>
               <DialogFooter>
                 <DialogClose asChild>
@@ -418,3 +444,5 @@ export default function DataTablesPage() {
     </div>
   );
 }
+
+    
