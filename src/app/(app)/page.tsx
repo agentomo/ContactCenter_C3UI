@@ -6,7 +6,7 @@ import type { UserStatus } from '../actions';
 import { getGenesysUsers } from '../actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { GenesysUserTable } from '@/components/genesys-user-table';
 import { RefreshCw, Search, Users } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -87,7 +87,7 @@ export default function HomePage() {
       return acc;
     }, {} as Record<UserStatus['status'], number>);
 
-    filteredUsers.forEach(user => { // Use filteredUsers to count based on current filters
+    filteredUsers.forEach(user => {
       if (counts[user.status] !== undefined) {
         counts[user.status]++;
       }
@@ -100,61 +100,66 @@ export default function HomePage() {
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 flex flex-col items-center selection:bg-primary/30 selection:text-primary-foreground">
       <header className="w-full max-w-6xl mb-8 text-center">
         <div className="flex items-center justify-center mb-4" role="banner">
-          <Users className="w-12 h-12 mr-3 text-primary" />
-          <h1 className="text-3xl sm:text-4xl font-headline font-bold text-primary tracking-tight">
-            User Presence
+          <Users className="w-10 h-10 md:w-12 md:h-12 mr-3 text-primary" />
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold text-primary tracking-tight">
+            User Presence Dashboard
           </h1>
         </div>
-        <p className="text-md sm:text-lg text-muted-foreground font-body max-w-2xl mx-auto">
-          Monitor the real-time presence and division of your Genesys Cloud agents.
+        <p className="text-sm sm:text-md md:text-lg text-muted-foreground font-body max-w-3xl mx-auto">
+          Monitor the real-time presence, division, skills, and extension of your Genesys Cloud agents. Utilize filters to refine your view.
         </p>
       </header>
 
       <section className="w-full max-w-6xl mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {STATUS_ORDER.map((status) => (
-            <Card key={status} className="shadow-md border-l-4" style={{ borderLeftColor: statusVisuals[status].colorHex }}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-                <CardTitle className="text-sm font-medium">{status}</CardTitle>
-                {React.cloneElement(statusVisuals[status].icon, { className: "h-4 w-4" })}
-              </CardHeader>
-              <CardContent className="pb-4 px-4">
-                <div className="text-2xl font-bold">{statusCounts[status]}</div>
-              </CardContent>
-            </Card>
-          ))}
+          {STATUS_ORDER.map((status) => {
+            const visual = statusVisuals[status];
+            return (
+              <Card key={status} className="shadow-md border-l-4" style={{ borderLeftColor: visual.colorHex }}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm font-medium">{status}</CardTitle>
+                  {React.cloneElement(visual.icon, { className: "h-4 w-4 text-muted-foreground" })}
+                </CardHeader>
+                <CardContent className="pb-4 px-4">
+                  <div className="text-2xl font-bold">{statusCounts[status]}</div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </section>
 
-      <main className="w-full max-w-6xl bg-card p-4 sm:p-6 rounded-xl shadow-2xl">
+      <main className="w-full max-w-6xl bg-card p-4 sm:p-6 rounded-xl shadow-xl border">
         <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 flex-wrap">
-          <div className="relative w-full sm:w-auto">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Filter by name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 w-full sm:w-[200px] md:w-[250px] h-11"
-              aria-label="Filter users by name"
-            />
+          <div className="flex-grow flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <div className="relative w-full sm:flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Filter by name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-full h-10 text-sm"
+                aria-label="Filter users by name"
+              />
+            </div>
+            <div className="w-full sm:flex-1 min-w-[180px]">
+              <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
+                <SelectTrigger className="w-full h-10 text-sm" aria-label="Filter by division">
+                  <SelectValue placeholder="Filter by division" />
+                </SelectTrigger>
+                <SelectContent>
+                  {divisions.map((division) => (
+                    <SelectItem key={division.id} value={division.id}>
+                      {division.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="w-full sm:w-auto">
-            <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
-              <SelectTrigger className="w-full sm:w-[200px] md:w-[250px] h-11" aria-label="Filter by division">
-                <SelectValue placeholder="Filter by division" />
-              </SelectTrigger>
-              <SelectContent>
-                {divisions.map((division) => (
-                  <SelectItem key={division.id} value={division.id}>
-                    {division.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={fetchUsers} disabled={isPending} variant="default" size="lg" className="w-full sm:w-auto">
-            <RefreshCw className={`mr-2 h-5 w-5 ${isPending ? 'animate-spin' : ''}`} />
+          <Button onClick={fetchUsers} disabled={isPending} variant="default" size="default" className="w-full sm:w-auto h-10">
+            <RefreshCw className={`mr-2 h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
             {isPending ? 'Refreshing...' : 'Refresh Status'}
           </Button>
         </div>
@@ -162,10 +167,9 @@ export default function HomePage() {
       </main>
 
       <footer className="w-full max-w-6xl mt-12 text-center text-xs text-muted-foreground font-body">
-        <p>&copy; {new Date().getFullYear()} User Presence. All rights reserved (conceptually).</p>
-        <p className="mt-1">This application demonstrates API authentication and data retrieval using OAuth 2.0 Client Credentials Grant.</p>
+        <p>&copy; {new Date().getFullYear()} CapitalGroup Genesys Configurator. All rights reserved.</p>
+        <p className="mt-1">This application interfaces with Genesys Cloud APIs for demonstration and operational purposes.</p>
       </footer>
     </div>
   );
 }
-
