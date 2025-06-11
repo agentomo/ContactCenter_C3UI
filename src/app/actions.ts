@@ -251,7 +251,6 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const dtSchema = dt.schema as DataTableSchema | undefined; 
 
     if (dtSchema) {
-      // Try to get PK from schema.key
       if (Object.prototype.hasOwnProperty.call(dtSchema, 'key') && typeof dtSchema.key === 'string' && dtSchema.key.trim().length > 0) {
         determinedPrimaryKeyField = dtSchema.key.trim();
         console.log(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - Primary key FOUND via schema.key: '${determinedPrimaryKeyField}'`);
@@ -262,7 +261,6 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
             console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.key property is MISSING from API response.`);
         }
 
-        // Fallback: if schema.key is not usable, check schema.required (if it's a single string and a valid property)
         if (Array.isArray(dtSchema.required) && 
             dtSchema.required.length === 1 &&
             typeof dtSchema.required[0] === 'string' &&
@@ -317,7 +315,7 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       description: dt.description,
       schema: { 
         properties,
-        primaryKey: determinedPrimaryKeyField ? [determinedPrimaryKeyField] : [], // Reflects the determined PK
+        primaryKey: determinedPrimaryKeyField ? [determinedPrimaryKeyField] : [], 
         key: dtSchema?.key, 
         required: dtSchema?.required,
       },
@@ -376,13 +374,12 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    // Experimental: Wrap rowData in an "item" object based on error message
-    const body = { item: rowData }; 
-    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Original rowData:`, JSON.stringify(rowData, null, 2));
-    console.log(`[actions.ts] updateDataTableRow: Sending API body:`, JSON.stringify(body, null, 2));
-
+    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
+    
     try {
-        const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, body);
+        // Pass rowData directly, assuming SDK handles structure.
+        console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(rowData, null, 2));
+        const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, rowData);
         return updatedRow as DataTableRow;
     } catch (error: any) {
         console.error(`[actions.ts] updateDataTableRow: Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message, error);
@@ -449,3 +446,4 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
     
+
