@@ -15,23 +15,22 @@ function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['sta
 
   switch (genesysSystemPresence.toUpperCase()) {
     case 'AVAILABLE':
-    case 'IDLE': // IDLE is often considered available
+    case 'IDLE': 
       return 'Available';
     case 'BUSY':
-    case 'MEAL': // MEAL, TRAINING are types of Busy
+    case 'MEAL': 
     case 'TRAINING':
       return 'Busy';
     case 'AWAY':
-    case 'BREAK': // BREAK is a type of Away
+    case 'BREAK': 
       return 'Away';
-    case 'ON_QUEUE': // Specifically for agents waiting for interactions
+    case 'ON_QUEUE': 
       return 'On Queue';
     case 'MEETING':
       return 'Meeting';
     case 'OFFLINE':
       return 'Offline';
     default:
-      // Fallback for any other unmapped Genesys statuses
       console.warn(`Unknown Genesys system presence: ${genesysSystemPresence}`);
       return 'Offline';
   }
@@ -45,9 +44,7 @@ interface GenesysUser {
       id: string;
       systemPresence?: string;
     };
-    // Other presence details might be available but are not used here
   };
-  // Other user details might be available but are not used here
 }
 
 export async function getGenesysUsers(): Promise<UserStatus[]> {
@@ -64,7 +61,6 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
   const usersApi = new platformClient.UsersApi();
 
   try {
-    // Set Genesys Cloud environment
     const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
     if (!regionHost) {
       console.error(`Invalid Genesys Cloud region: ${region}. See https://developer.genesys.cloud/platform/api/`);
@@ -72,17 +68,13 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     }
     client.setEnvironment(regionHost);
 
-    // Authenticate
     await client.loginClientCredentialsGrant(clientId, clientSecret);
     console.log('Successfully authenticated with Genesys Cloud API.');
 
-    // Fetch users with their presence information
-    // Note: This fetches up to 100 users. For more users, pagination would be required.
     const userResponse = await usersApi.getUsers({
-      pageSize: 100, // Max users to fetch in one go
+      pageSize: 100, 
       pageNumber: 1,
-      expand: ['presence'], // Crucial to get presence data
-      // Add other filters if needed, e.g., state: 'active'
+      expand: ['presence'], 
     });
 
     if (!userResponse.entities) {
@@ -101,17 +93,26 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     console.log(`Fetched and mapped ${mappedUsers.length} users.`);
     return mappedUsers;
 
-  } catch (error) {
-    console.error('Error fetching or processing Genesys Cloud user data:', error);
-    // Provide a more specific error message if possible
-    if (error instanceof Error && error.message.includes('Invalid OAuth client credentials')) {
-         throw new Error('Genesys Cloud authentication failed: Invalid client ID or secret.');
-    } else if (error instanceof Error && error.message.includes('Unable to find a session for token')) {
-        // This can happen if token expired or was invalidated before use
+  } catch (error: any) {
+    console.error('Error fetching or processing Genesys Cloud user data (full error object):', error);
+    
+    let detailedErrorMessage = 'An unknown error occurred with the Genesys Cloud API.';
+    if (error.isAxiosError && error.response) {
+      // Log the detailed error response from Genesys API
+      console.error('Genesys API Error Response Body:', error.response.data);
+      detailedErrorMessage = `API Error ${error.response.status}: ${JSON.stringify(error.response.data)}. Trace ID (contextId): ${error.response.data?.contextId || 'N/A'}`;
+    } else if (error instanceof Error) {
+      detailedErrorMessage = error.message;
+    } else {
+      detailedErrorMessage = String(error);
+    }
+
+    if (detailedErrorMessage.includes('Invalid OAuth client credentials') || (error.response && error.response.status === 401)) {
+         throw new Error('Genesys Cloud authentication failed: Invalid client ID or secret, or token issue.');
+    } else if (detailedErrorMessage.includes('Unable to find a session for token')) {
         throw new Error('Genesys Cloud session/token issue. Please try again or re-check credentials.');
     }
-    // Include the original error message for better client-side debugging
-    const originalErrorMessage = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to retrieve user statuses from Genesys Cloud. API Error: ${originalErrorMessage}. Check server logs for more details.`);
+    
+    throw new Error(`Failed to retrieve user statuses from Genesys Cloud. Details: ${detailedErrorMessage}. Check server logs for the full error object and Genesys API response body.`);
   }
 }
