@@ -247,7 +247,6 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const properties: Record<string, DataTableColumn> = {};
     let determinedPrimaryKeyField: string | undefined = undefined;
 
-    // Refined primary key detection
     if (dt.schema && Object.prototype.hasOwnProperty.call(dt.schema, 'key')) {
         if (typeof dt.schema.key === 'string') {
             const trimmedKey = dt.schema.key.trim();
@@ -327,8 +326,16 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
         throw new Error(`Cannot add row: Primary key field "${dtDetails.primaryKeyField}" must have a value.`);
     }
 
+    // Prepare the body by removing the primary key field as per API requirements for POST
+    // The primary key value is part of the rowData itself for the POST body's key-value structure.
+    const body = { ...rowData };
+    // The `key` property of the rowData itself IS the primary key value for the new row.
+    // The Genesys Cloud API expects the row data itself to contain the primary key value.
+
     try {
-        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData);
+        // The body for postFlowsDatatableRows is actually just the row content (a JSON object).
+        // The 'key' for this new row is expected to be one of the properties within this rowData object.
+        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
         return newRow as DataTableRow; 
     } catch (error: any) {
         console.error(`[actions.ts] addDataTableRow: Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
@@ -336,9 +343,9 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
         if (error.body?.details?.[0]?.errorMessage) {
             details += ` (${error.body.details[0].errorMessage})`;
         } else if (error.body?.code === 'architect.datatables.key.conflict') {
-            details = `A row with the key "${rowKey}" already exists in DataTable ${dataTableId}.`;
+            details = `A row with the key "${rowKey}" already exists in DataTable ${dtDetails.name}.`;
         }
-        throw new Error(`Failed to add row to DataTable ${dataTableId}. Details: ${details}`);
+        throw new Error(`Failed to add row to DataTable ${dtDetails.name}. Details: ${details}`);
     }
 }
 
@@ -412,3 +419,4 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
+

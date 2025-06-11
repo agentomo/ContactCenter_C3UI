@@ -7,6 +7,7 @@ import {
   getDataTableRows,
   getDataTables,
   updateDataTableRow,
+  addDataTableRow, // New action
 } from '@/app/actions';
 import type { DataTable, DataTableDetails, DataTableRow, DataTableColumn } from '@/app/actions';
 import { Button } from '@/components/ui/button';
@@ -39,7 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from "@/hooks/use-toast";
-import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle, ListFilter } from 'lucide-react';
+import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle, ListFilter, PlusCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DataTablesPage() {
@@ -53,10 +54,13 @@ export default function DataTablesPage() {
   const [editedRowData, setEditedRowData] = useState<DataTableRow | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newRowData, setNewRowData] = useState<DataTableRow | null>(null);
+
   const [isLoadingTablesList, startLoadingTablesList] = useTransition();
   const [isLoadingDetails, startLoadingDetails] = useTransition();
   const [isLoadingRows, startLoadingRows] = useTransition();
-  const [isSubmitting, startSubmitting] = useTransition();
+  const [isSubmitting, startSubmitting] = useTransition(); // Used for both edit and create
 
   useEffect(() => {
     startLoadingTablesList(async () => {
@@ -166,7 +170,7 @@ export default function DataTablesPage() {
     setEditingRowId(null);
   };
 
-  const handleDialogOpeChange = (open: boolean) => {
+  const handleEditDialogOpeChange = (open: boolean) => {
     if (!open) {
       handleCancelEdit();
     } else {
@@ -174,8 +178,12 @@ export default function DataTablesPage() {
     }
   }
 
-  const handleInputChange = (fieldName: string, value: string | number | boolean | null) => {
-    setEditedRowData(prev => prev ? { ...prev, [fieldName]: value } : null);
+  const handleInputChange = (fieldName: string, value: string | number | boolean | null, target: 'edit' | 'create') => {
+    if (target === 'edit') {
+        setEditedRowData(prev => prev ? { ...prev, [fieldName]: value } : null);
+    } else {
+        setNewRowData(prev => prev ? { ...prev, [fieldName]: value } : null);
+    }
   };
 
   const handleSaveEdit = () => {
@@ -214,6 +222,78 @@ export default function DataTablesPage() {
     });
   };
 
+  const handleOpenCreateDialog = () => {
+    if (!dataTableDetails || !dataTableDetails.primaryKeyField) {
+      toast({ title: "Cannot Create Row", description: "Primary key field not defined for the selected table. Creation is disabled.", variant: "destructive"});
+      return;
+    }
+    const initialData: DataTableRow = {};
+    Object.keys(dataTableDetails.schema.properties).forEach(colName => {
+      const colSchema = getColumnSchema(colName);
+      if (colSchema?.type === 'boolean' || (colSchema?.type === 'string' && (String(initialData[colName]).toLowerCase() === 'true' || String(initialData[colName]).toLowerCase() === 'false'))) {
+        initialData[colName] = false; // Default booleans to false
+      } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
+        initialData[colName] = null; // Default numbers to null or handle as needed
+      }
+      else {
+        initialData[colName] = ''; // Default others to empty string
+      }
+    });
+    setNewRowData(initialData);
+    setIsCreateDialogOpen(true);
+  };
+
+  const handleCancelCreate = () => {
+    setIsCreateDialogOpen(false);
+    setNewRowData(null);
+  };
+
+  const handleCreateDialogOpeChange = (open: boolean) => {
+    if (!open) {
+      handleCancelCreate();
+    } else {
+      // Logic for opening, potentially handled by onOpenAutoFocus or similar
+      setIsCreateDialogOpen(true);
+    }
+  };
+
+  const handleSaveCreate = () => {
+    if (!selectedTableId || !newRowData || !dataTableDetails?.primaryKeyField) {
+      toast({ title: "Error Creating Row", description: "Missing critical data (e.g., table ID, primary key field definition, or row data).", variant: "destructive" });
+      return;
+    }
+    const pkField = dataTableDetails.primaryKeyField;
+    if (newRowData[pkField] === undefined || newRowData[pkField] === null || String(newRowData[pkField]).trim() === '') {
+        toast({ title: "Primary Key Required", description: `The primary key field "${pkField}" cannot be empty.`, variant: "destructive" });
+        return;
+    }
+
+    const rowDataPayload: DataTableRow = { ...newRowData };
+     for (const key in rowDataPayload) {
+      if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
+        if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
+          rowDataPayload[key] = null;
+        }
+      }
+    }
+
+    startSubmitting(async () => {
+      try {
+        await addDataTableRow(selectedTableId, rowDataPayload);
+        toast({ title: "Row Created", description: "Successfully created the new row." });
+        fetchDataForTable(selectedTableId);
+        handleCancelCreate();
+      } catch (error: any) {
+        toast({
+          title: "Error Creating Row",
+          description: error.message || "Could not create the row. The primary key might already exist or data is invalid.",
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+
   const isLoadingCurrentTableData = isLoadingDetails || isLoadingRows;
   const currentTableName = dataTableDetails?.name || "the selected table";
   
@@ -231,7 +311,7 @@ export default function DataTablesPage() {
           </h1>
         </div>
         <p className="text-md sm:text-lg text-muted-foreground font-body max-w-2xl mx-auto">
-          Select a Genesys Cloud DataTable to view and manage its rows.
+          Select a Genesys Cloud DataTable to view, manage its rows, or create new entries.
         </p>
       </header>
 
@@ -286,13 +366,23 @@ export default function DataTablesPage() {
                   )}
                 {!dataTableDetails?.primaryKeyField && !isLoadingDetails && dataTableDetails && (
                   <p className="text-xs text-destructive mt-1 font-semibold">
-                    Warning: Primary key not identified by the API for this table. Editing will be disabled. 
+                    Warning: Primary key not identified by the API for this table. Editing and Creation will be disabled. 
                     (Ensure a primary key is set in Genesys Cloud for "{currentTableName}".)
                   </p>
                 )}
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                <Button onClick={handleRefresh} disabled={isLoadingCurrentTableData || isSubmitting || isEditDialogOpen || !selectedTableId} variant="default" size="sm">
+                <Button 
+                  onClick={handleOpenCreateDialog} 
+                  disabled={isLoadingCurrentTableData || isSubmitting || isEditDialogOpen || isCreateDialogOpen || !selectedTableId || !dataTableDetails?.primaryKeyField} 
+                  variant="outline" 
+                  size="sm"
+                  title={!dataTableDetails?.primaryKeyField ? "Create disabled: No primary key defined" : "Create new row"}
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Create Row
+                </Button>
+                <Button onClick={handleRefresh} disabled={isLoadingCurrentTableData || isSubmitting || isEditDialogOpen || isCreateDialogOpen || !selectedTableId} variant="default" size="sm">
                   <RefreshCw className={`mr-2 h-4 w-4 ${(isLoadingCurrentTableData) ? 'animate-spin' : ''}`} />
                   {(isLoadingCurrentTableData) ? 'Refreshing...' : 'Refresh Data'}
                 </Button>
@@ -375,7 +465,7 @@ export default function DataTablesPage() {
                                   variant="ghost" 
                                   size="icon" 
                                   className="h-8 w-8" 
-                                  disabled={isSubmitting || isEditDialogOpen || !dataTableDetails?.primaryKeyField} 
+                                  disabled={isSubmitting || isEditDialogOpen || isCreateDialogOpen || !dataTableDetails?.primaryKeyField} 
                                   onClick={() => handleEdit(row)} 
                                   title={!dataTableDetails?.primaryKeyField ? "Edit disabled: No primary key defined by API" : "Edit row"}
                                 >
@@ -393,7 +483,8 @@ export default function DataTablesPage() {
             </CardContent>
           </Card>
 
-          <Dialog open={isEditDialogOpen} onOpenChange={handleDialogOpeChange}>
+          {/* Edit Row Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpeChange}>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Edit Row for {currentTableName}</DialogTitle>
@@ -418,7 +509,7 @@ export default function DataTablesPage() {
                     .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) 
                     .sort(([aName], [bName]) => aName.localeCompare(bName)) 
                     .map(([colName, colDef]) => {
-                      const colSchema = colDef as DataTableColumn; // Cast for easier access
+                      const colSchema = colDef as DataTableColumn;
                       const currentValue = editedRowData?.[colName];
                       const isActualBooleanSchema = colSchema.type === 'boolean';
                       const isStringRepresentingBoolean = typeof currentValue === 'string' && (currentValue.toLowerCase() === 'true' || currentValue.toLowerCase() === 'false');
@@ -430,33 +521,33 @@ export default function DataTablesPage() {
                       
                       return (
                         <div className="grid grid-cols-4 items-center gap-4" key={colName}>
-                          <Label htmlFor={colName} className="text-right col-span-1">
+                          <Label htmlFor={`edit-${colName}`} className="text-right col-span-1">
                             {colName} ({colSchema.type})
                           </Label>
                           <div className="col-span-3">
                             {treatAsBooleanInput ? (
                               <Checkbox
-                                id={colName}
+                                id={`edit-${colName}`}
                                 checked={String(currentValue).toLowerCase() === 'true'}
-                                onCheckedChange={(checked) => handleInputChange(colName, !!checked)} // Sends actual boolean back
+                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')}
                                 disabled={isSubmitting}
                                 aria-label={`Edit ${colName}`}
                               />
                             ) : colSchema.type === 'integer' || colSchema.type === 'number' ? (
                               <Input
-                                id={colName}
+                                id={`edit-${colName}`}
                                 type="number"
                                 value={currentValue === null || currentValue === undefined ? '' : String(currentValue)}
-                                onChange={(e) => handleInputChange(colName, e.target.value === '' ? null : Number(e.target.value))}
+                                onChange={(e) => handleInputChange(colName, e.target.value === '' ? null : Number(e.target.value), 'edit')}
                                 className="h-9"
                                 disabled={isSubmitting}
                                 aria-label={`Edit ${colName}`}
                               />
                             ) : (
                               <Input
-                                id={colName}
+                                id={`edit-${colName}`}
                                 value={currentValue as string ?? ''}
-                                onChange={(e) => handleInputChange(colName, e.target.value)}
+                                onChange={(e) => handleInputChange(colName, e.target.value, 'edit')}
                                 className="h-9"
                                 disabled={isSubmitting}
                                 aria-label={`Edit ${colName}`}
@@ -480,6 +571,84 @@ export default function DataTablesPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* Create Row Dialog */}
+          <Dialog open={isCreateDialogOpen} onOpenChange={handleCreateDialogOpeChange}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Create New Row in {currentTableName}</DialogTitle>
+                <DialogDescription>
+                  Provide values for all fields. The primary key field must be unique.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+                {newRowData && dataTableDetails && dataTableDetails.schema.properties &&
+                  orderedColumnNames.map((colName) => {
+                      const colSchema = getColumnSchema(colName) as DataTableColumn;
+                      const currentValue = newRowData?.[colName];
+                      const isPrimaryKey = colName === dataTableDetails.primaryKeyField;
+
+                      const isActualBooleanSchema = colSchema.type === 'boolean';
+                      const isStringRepresentingBoolean = typeof currentValue === 'string' && (currentValue.toLowerCase() === 'true' || currentValue.toLowerCase() === 'false');
+                      
+                      let treatAsBooleanInput = isActualBooleanSchema;
+                      if (!treatAsBooleanInput && colSchema.type === 'string' && isStringRepresentingBoolean) {
+                        treatAsBooleanInput = true;
+                      }
+                      
+                      return (
+                        <div className="grid grid-cols-4 items-center gap-4" key={`create-${colName}`}>
+                          <Label htmlFor={`create-${colName}`} className={`text-right col-span-1 ${isPrimaryKey ? 'font-bold' : ''}`}>
+                            {colName} {isPrimaryKey ? '(Key)' : ''} ({colSchema.type})
+                          </Label>
+                          <div className="col-span-3">
+                            {treatAsBooleanInput ? (
+                              <Checkbox
+                                id={`create-${colName}`}
+                                checked={String(currentValue).toLowerCase() === 'true'}
+                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'create')}
+                                disabled={isSubmitting}
+                                aria-label={`Create ${colName}`}
+                              />
+                            ) : colSchema.type === 'integer' || colSchema.type === 'number' ? (
+                              <Input
+                                id={`create-${colName}`}
+                                type="number"
+                                value={currentValue === null || currentValue === undefined ? '' : String(currentValue)}
+                                onChange={(e) => handleInputChange(colName, e.target.value === '' ? null : Number(e.target.value), 'create')}
+                                className="h-9"
+                                disabled={isSubmitting}
+                                aria-label={`Create ${colName}`}
+                              />
+                            ) : (
+                              <Input
+                                id={`create-${colName}`}
+                                value={currentValue as string ?? ''}
+                                onChange={(e) => handleInputChange(colName, e.target.value, 'create')}
+                                className="h-9"
+                                disabled={isSubmitting}
+                                aria-label={`Create ${colName}`}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button type="button" onClick={handleSaveCreate} disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Create Row
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
         </main>
       )}
 
