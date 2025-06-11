@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from "@/components/ui/label"; // Added missing import
+import { Label } from "@/components/ui/label";
 import { Badge } from '@/components/ui/badge';
 import { toast } from "@/hooks/use-toast";
-import { ListTodo, UserCog, X, PlusCircle, Save, Filter } from 'lucide-react';
+import { ListTodo, UserCog, X, PlusCircle, Save, Filter, UserCircle, Building2, Info } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusIndicator } from '@/components/status-indicator'; // Added import for StatusIndicator
 
 interface Division {
   id: string;
@@ -93,16 +94,15 @@ export default function SkillsManagementPage() {
 
   const handleDivisionChange = (divisionId: string) => {
     setSelectedDivisionId(divisionId);
-    // If the currently selected user is not in the newly selected division, deselect the user
     if (selectedUserId) {
-      const currentUser = allUsers.find(u => u.id === selectedUserId);
-      if (currentUser && divisionId !== 'all' && currentUser.divisionId !== divisionId) {
+      const currentUserInSelection = allUsers.find(u => u.id === selectedUserId);
+      if (currentUserInSelection && divisionId !== 'all' && currentUserInSelection.divisionId !== divisionId) {
         setSelectedUserId(undefined);
       }
     }
   };
   
-  const selectedUser = allUsers.find(u => u.id === selectedUserId);
+  const selectedUser = useMemo(() => allUsers.find(u => u.id === selectedUserId), [allUsers, selectedUserId]);
 
   const handleSaveSkills = () => {
     if (!selectedUserId) return;
@@ -125,13 +125,13 @@ export default function SkillsManagementPage() {
   };
   
   const handleProficiencyChange = (skillId: string, proficiency: number) => {
-    const newProficiency = Math.max(1, Math.min(5, proficiency)); // Clamp between 1 and 5
+    const newProficiency = Math.max(1, Math.min(5, proficiency));
     setModifiedSkills(new Map(modifiedSkills).set(skillId, newProficiency));
   };
 
   const handleAddSkill = (skillId: string) => {
     if (!modifiedSkills.has(skillId)) {
-      setModifiedSkills(new Map(modifiedSkills).set(skillId, 1)); // Default proficiency 1
+      setModifiedSkills(new Map(modifiedSkills).set(skillId, 1));
     }
   };
 
@@ -164,7 +164,7 @@ export default function SkillsManagementPage() {
               <UserCog className="w-6 h-6 text-accent" />
               Select User
             </CardTitle>
-            <CardDescription>Filter by division, then choose a user to manage their skills.</CardDescription>
+            <CardDescription>Filter by division, then choose a user to manage their skills or view details.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoadingUsers ? (
@@ -215,6 +215,36 @@ export default function SkillsManagementPage() {
           </CardContent>
         </Card>
 
+        {selectedUser && (
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Info className="w-6 h-6 text-primary" />
+                User Details
+              </CardTitle>
+              <CardDescription>Basic information for {selectedUser.name}.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <UserCircle className="w-5 h-5 text-muted-foreground" />
+                <span className="font-medium">Name:</span>
+                <span>{selectedUser.name}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Building2 className="w-5 h-5 text-muted-foreground" />
+                <span className="font-medium">Division:</span>
+                <span>{selectedUser.divisionName}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* StatusIndicator already includes an icon */}
+                <span className="font-medium mr-1">Status:</span>
+                <StatusIndicator status={selectedUser.status} />
+              </div>
+              {/* Future details can be added here, e.g., Email, Department, Title */}
+            </CardContent>
+          </Card>
+        )}
+
         {selectedUserId && (
           <>
             <Card className="shadow-lg">
@@ -240,7 +270,7 @@ export default function SkillsManagementPage() {
                         <div className="flex items-center gap-2">
                           <Input
                             type="number"
-                            min="1" // Proficiency should be between 1 and 5
+                            min="1"
                             max="5"
                             value={proficiency}
                             onChange={(e) => handleProficiencyChange(skillId, parseInt(e.target.value, 10))}
@@ -252,7 +282,7 @@ export default function SkillsManagementPage() {
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleRemoveSkill(skillId)} 
-                            className="text-destructive hover:text-destructive/80"
+                            className="text-destructive hover:text-destructive/80 h-9 w-9"
                             disabled={isUpdatingUserSkills}
                             title="Remove Skill"
                             >
@@ -284,7 +314,7 @@ export default function SkillsManagementPage() {
                         key={skill.id}
                         variant="outline"
                         onClick={() => handleAddSkill(skill.id)}
-                        className="justify-start gap-2"
+                        className="justify-start gap-2 h-10"
                         disabled={isUpdatingUserSkills}
                       >
                         <PlusCircle className="w-5 h-5 text-green-600" />
@@ -298,7 +328,7 @@ export default function SkillsManagementPage() {
             
             <div className="flex justify-end">
               <Button onClick={handleSaveSkills} disabled={isUpdatingUserSkills || isLoadingUserSkills}>
-                <Save className="mr-2 h-5 w-5" />
+                {isUpdatingUserSkills ? <Filter className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" /> }
                 {isUpdatingUserSkills ? 'Saving...' : 'Save All Changes'}
               </Button>
             </div>
@@ -308,4 +338,3 @@ export default function SkillsManagementPage() {
     </div>
   );
 }
-
