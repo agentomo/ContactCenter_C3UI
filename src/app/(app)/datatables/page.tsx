@@ -85,8 +85,8 @@ export default function DataTablesPage() {
   const fetchDataForTable = (tableId: string) => {
     startLoadingDetails(async () => {
       try {
-        setDataTableDetails(null); // Clear previous details
-        setDataTableRows([]); // Clear previous rows
+        setDataTableDetails(null); 
+        setDataTableRows([]); 
         const details = await getDataTableDetails(tableId);
         setDataTableDetails(details);
       } catch (error: any) {
@@ -345,8 +345,13 @@ export default function DataTablesPage() {
                             <TableRow key={currentPkValue}>
                               {orderedColumnNames.map(colName => (
                                 <TableCell key={`cell-${rowIndex}-${colName}`} className={colName === dataTableDetails?.primaryKeyField ? 'font-semibold text-primary/80' : ''}>
-                                  {typeof row[colName] === 'boolean' ? row[colName] ? 'True' : 'False' :
-                                   row[colName] === null || row[colName] === undefined ? <span className="text-muted-foreground italic">empty</span> : String(row[colName])}
+                                  {dataTableDetails?.schema.properties[colName]?.type === 'boolean' ? (
+                                    <Checkbox checked={!!row[colName]} disabled aria-label={String(row[colName])} />
+                                  ) : row[colName] === null || row[colName] === undefined ? (
+                                    <span className="text-muted-foreground italic">empty</span>
+                                  ) : (
+                                    String(row[colName])
+                                  )}
                                 </TableCell>
                               ))}
                               <TableCell className="text-right">
