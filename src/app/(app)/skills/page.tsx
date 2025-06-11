@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from "@/components/ui/label"; // Added missing import
 import { Badge } from '@/components/ui/badge';
 import { toast } from "@/hooks/use-toast";
 import { ListTodo, UserCog, X, PlusCircle, Save, Filter } from 'lucide-react';
@@ -124,12 +125,8 @@ export default function SkillsManagementPage() {
   };
   
   const handleProficiencyChange = (skillId: string, proficiency: number) => {
-    const newProficiency = Math.max(0, Math.min(5, proficiency)); // Clamp between 0 and 5 (0 for removal conceptually, 1-5 for levels)
-    if (newProficiency === 0) { // If proficiency is set to 0, treat as removal
-        handleRemoveSkill(skillId);
-    } else {
-        setModifiedSkills(new Map(modifiedSkills).set(skillId, newProficiency));
-    }
+    const newProficiency = Math.max(1, Math.min(5, proficiency)); // Clamp between 1 and 5
+    setModifiedSkills(new Map(modifiedSkills).set(skillId, newProficiency));
   };
 
   const handleAddSkill = (skillId: string) => {
@@ -311,3 +308,4 @@ export default function SkillsManagementPage() {
     </div>
   );
 }
+
