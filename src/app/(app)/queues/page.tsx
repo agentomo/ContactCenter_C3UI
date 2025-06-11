@@ -6,7 +6,7 @@ import { getActiveQueues } from '@/app/actions';
 import type { QueueBasicData } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RefreshCw, Building, LayoutList, Filter } from 'lucide-react'; // Added Filter icon
+import { RefreshCw, Building, LayoutList, Filter, Users, Clock, PhoneForwarded } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"; // Added Select imports
+} from "@/components/ui/select"; 
 
 interface Division {
   id: string;
@@ -38,7 +38,7 @@ export default function QueuesPage() {
           duration: Infinity, 
         });
         toastId = loadingToast.id;
-        console.log("[QueuesPage] Fetching queue list (all parameters removed)...");
+        console.log("[QueuesPage] Fetching queue list and metrics...");
 
         const data = await getActiveQueues();
         console.log("[QueuesPage] Data received from getActiveQueues:", JSON.stringify(data, null, 2));
@@ -56,7 +56,7 @@ export default function QueuesPage() {
         } else {
           toast({
             title: "Queue List Refreshed",
-            description: `Successfully fetched ${data.length} queues.`,
+            description: `Successfully fetched ${data.length} queues with metrics.`,
             duration: 3000,
           });
         }
@@ -88,16 +88,12 @@ export default function QueuesPage() {
       if (queue.divisionId && queue.divisionName && !uniqueDivIds.has(queue.divisionId)) {
         uniqueDivIds.add(queue.divisionId);
         allDivs.push({ id: queue.divisionId, name: queue.divisionName });
-      } else if (!queue.divisionId && !uniqueDivIds.has('none')) { // Handle queues with no division
-        // To avoid 'none' appearing multiple times if many queues have no division
       }
     });
-    // Sort divisions alphabetically, ensuring "All Divisions" is always first.
-    // "No Division Specified" can be sorted with others or placed specifically if needed.
     const sortedDivs = allDivs.sort((a, b) => a.name.localeCompare(b.name));
     
     const result = [{ id: 'all', name: 'All Divisions' }];
-    if (allQueueData.some(q => !q.divisionId)) { // Add "No Division" option if relevant
+    if (allQueueData.some(q => !q.divisionId)) { 
         result.push({ id: 'no-division', name: 'No Division Assigned' });
     }
     result.push(...sortedDivs);
@@ -122,11 +118,11 @@ export default function QueuesPage() {
         <div className="flex items-center justify-center mb-4" role="banner">
           <LayoutList className="w-12 h-12 mr-3 text-primary" />
           <h1 className="text-3xl sm:text-4xl font-headline font-bold text-primary tracking-tight">
-            Queues
+            Queues Overview
           </h1>
         </div>
         <p className="text-md sm:text-lg text-muted-foreground font-body max-w-2xl mx-auto">
-          View a list of queues in your Genesys Cloud organization. Filter by division.
+          View a list of queues with real-time metrics from your Genesys Cloud organization.
         </p>
       </header>
 
@@ -161,6 +157,8 @@ export default function QueuesPage() {
                 <Skeleton className="h-4 w-1/2" />
               </CardHeader>
               <CardContent className="space-y-3 pt-2">
+                <Skeleton className="h-5 w-full mb-2" />
+                <Skeleton className="h-5 w-full mb-2" />
                 <Skeleton className="h-5 w-full" />
               </CardContent>
             </Card>
@@ -179,7 +177,7 @@ export default function QueuesPage() {
               }
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Please ensure queues are configured and that the application's OAuth client has the necessary permissions (e.g., `routing:queue:view`) and division access in Genesys Cloud.
+              Please ensure queues are configured and that the application's OAuth client has the necessary permissions (e.g., `routing:queue:view`, `analytics:queueObservation:view`) and division access in Genesys Cloud.
             </p>
              <p className="text-xs text-muted-foreground mt-4">
               Check client-side console (Developer Tools) and server-side logs for more details from the API.
@@ -206,8 +204,29 @@ export default function QueuesPage() {
                     </CardDescription>
                  )}
               </CardHeader>
-              <CardContent className="pt-2">
-                <p className="text-xs text-muted-foreground">Queue ID: {queue.id}</p>
+              <CardContent className="pt-2 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center text-muted-foreground">
+                    <Clock className="w-4 h-4 mr-2 text-sky-600" />
+                    Waiting:
+                  </span>
+                  <span className="font-semibold text-sky-700">{queue.interactionsWaiting ?? 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center text-muted-foreground">
+                    <PhoneForwarded className="w-4 h-4 mr-2 text-green-600" />
+                    Active:
+                  </span>
+                  <span className="font-semibold text-green-700">{queue.interactionsActive ?? 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center text-muted-foreground">
+                    <Users className="w-4 h-4 mr-2 text-indigo-600" />
+                    Available Members:
+                  </span>
+                  <span className="font-semibold text-indigo-700">{queue.availableMembers ?? 'N/A'}</span>
+                </div>
+                <p className="text-xs text-muted-foreground/70 pt-2">Queue ID: {queue.id}</p>
               </CardContent>
             </Card>
           ))}
@@ -216,3 +235,4 @@ export default function QueuesPage() {
     </div>
   );
 }
+

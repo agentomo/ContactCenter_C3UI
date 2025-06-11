@@ -375,7 +375,7 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    const bodyForApi = JSON.parse(JSON.stringify(rowData)); 
+    const bodyForApi = JSON.parse(JSON.stringify(rowData)); // Ensure a clean copy
 
     console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
     console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(bodyForApi, null, 2));
@@ -412,38 +412,97 @@ export interface QueueBasicData {
   name: string;
   divisionId?: string;
   divisionName?: string;
+  // Metrics
+  interactionsWaiting?: number;
+  interactionsActive?: number;
+  availableMembers?: number;
 }
 
 export async function getActiveQueues(): Promise<QueueBasicData[]> {
-  await getAuthenticatedClient();
-  const routingApi = new platformClient.RoutingApi();
+  const apiClient = await getAuthenticatedClient();
+  const routingApi = new platformClient.RoutingApi(apiClient);
+  const analyticsApi = new platformClient.AnalyticsApi(apiClient);
 
-  let activeQueuesEntities: any[] = [];
-  const apiOptions = {}; // Removed all parameters
+  const apiOptions = { pageSize: 200 }; // Fetch up to 200 queues initially
+  console.log('[actions.ts] getActiveQueues: API call parameters for routing/queues:', JSON.stringify(apiOptions, null, 2));
 
-  console.log('[actions.ts] getActiveQueues: API call parameters:', JSON.stringify(apiOptions, null, 2));
-
+  let basicQueues: any[] = [];
   try {
     const queuesResponse = await routingApi.getRoutingQueues(apiOptions);
-    activeQueuesEntities = queuesResponse.entities || [];
-    console.log(`[actions.ts] getActiveQueues: Initial fetch found ${activeQueuesEntities.length} queues from API.`);
-
+    basicQueues = queuesResponse.entities || [];
+    console.log(`[actions.ts] getActiveQueues: Initial fetch found ${basicQueues.length} queues from API.`);
   } catch (error: any) {
-    console.error('[actions.ts] getActiveQueues: Error fetching queues:', error.body || error.message);
-    throw new Error(`Failed to retrieve queues from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
+    console.error('[actions.ts] getActiveQueues: Error fetching basic queue list:', error.body || error.message);
+    throw new Error(`Failed to retrieve basic queue list from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
   }
 
-  if (activeQueuesEntities.length === 0) {
-    console.warn('[actions.ts] getActiveQueues: No queues found (or visible to OAuth client). This could be due to no queues being configured, insufficient permissions to list them, or no queues matching other implicit criteria.');
+  if (basicQueues.length === 0) {
+    console.warn('[actions.ts] getActiveQueues: No queues found. Returning empty array.');
     return [];
   }
 
-  const mappedQueues = activeQueuesEntities.map(q => ({
+  let mappedQueues: QueueBasicData[] = basicQueues.map(q => ({
     id: q.id!,
     name: q.name!,
     divisionId: q.division?.id,
     divisionName: q.division?.name,
+    interactionsWaiting: undefined,
+    interactionsActive: undefined,
+    availableMembers: undefined,
   }));
+
+  // Fetch observation data for these queues
+  const queueIds = mappedQueues.map(q => q.id);
+  if (queueIds.length > 0) {
+    try {
+      const observationQuery = {
+        filter: {
+          type: "or",
+          clauses: queueIds.map(id => ({
+            type: "dimension",
+            dimension: "queueId",
+            operator: "matches",
+            value: id,
+          }))
+        } as platformClient.Models.QueueObservationQueryFilter, // Type assertion for filter
+        metrics: ["oWaiting", "oInteracting", "oAvailableUsers"]
+      };
+      
+      // Log the exact body being sent for the observation query
+      console.log('[actions.ts] getActiveQueues: Analytics observation query body:', JSON.stringify(observationQuery, null, 2));
+
+      const observationResponse = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery as any); // Use 'as any' if type issues persist with SDK body
+
+      if (observationResponse.results) {
+        const metricsMap = new Map<string, Partial<QueueBasicData>>();
+        observationResponse.results.forEach(result => {
+          const queueId = result.group?.['queueId'];
+          if (queueId && result.data) {
+            const queueMetrics: Partial<QueueBasicData> = {};
+            result.data.forEach(metricPoint => {
+              if (metricPoint.metric === 'oWaiting') {
+                queueMetrics.interactionsWaiting = metricPoint.stats?.count ?? 0;
+              } else if (metricPoint.metric === 'oInteracting') {
+                queueMetrics.interactionsActive = metricPoint.stats?.count ?? 0;
+              } else if (metricPoint.metric === 'oAvailableUsers') {
+                queueMetrics.availableMembers = metricPoint.stats?.count ?? 0;
+              }
+            });
+            metricsMap.set(queueId, queueMetrics);
+          }
+        });
+
+        mappedQueues = mappedQueues.map(queue => ({
+          ...queue,
+          ...(metricsMap.get(queue.id) || {}),
+        }));
+      }
+    } catch (error: any) {
+      console.error('[actions.ts] getActiveQueues: Error fetching queue observation data:', error.body || error.message, error);
+      // Don't throw here, just log, so we can still return basic queue data
+      // The UI will show N/A or 0 for metrics if they fail.
+    }
+  }
   
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
