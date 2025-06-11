@@ -375,7 +375,6 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    // Ensure we are working with a fresh copy for the body
     const bodyForApi = JSON.parse(JSON.stringify(rowData)); 
 
     console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
@@ -420,18 +419,7 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   const routingApi = new platformClient.RoutingApi();
 
   let activeQueuesEntities: any[] = [];
-  const apiOptions: {
-    pageSize: number;
-    pageNumber: number;
-    name: string;
-    expand: string[];
-    state?: 'active' | 'inactive' | 'deleted'; // Optional state
-  } = {
-    pageSize: 200,
-    pageNumber: 1,
-    name: '%', 
-    expand: ['division'], 
-  };
+  const apiOptions = {}; // Removed all parameters
 
   console.log('[actions.ts] getActiveQueues: API call parameters:', JSON.stringify(apiOptions, null, 2));
 
@@ -460,3 +448,4 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
     
+
