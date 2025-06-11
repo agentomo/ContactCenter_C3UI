@@ -197,9 +197,9 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
 
   try {
     console.log(`[actions.ts] updateUserSkills: Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
-    console.log(`[actions.ts] updateUserSkills: typeof usersApi.putUserRoutingskills (before call): ${typeof (usersApi as any).putUserRoutingskills}`);
+    console.log(`[actions.ts] updateUserSkills: typeof usersApi.putUserRoutingskills (before call): ${typeof usersApi.putUserRoutingskills}`);
     
-    const updatedSkillsData = await (usersApi as any).putUserRoutingskills(userId, apiFormattedSkills);
+    const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
     
     return (updatedSkillsData.entities || [])
       .filter(skill => skill.id && skill.name && skill.proficiency !== undefined)
@@ -221,8 +221,8 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
     } else if ((error as any).response?.data?.message) { 
         details = (error as any).response.data.message;
     }
-    if (error.message && error.message.toLowerCase().includes("is not a function")) {
-      details = error.message; 
+    if (error.message && String(error.message).toLowerCase().includes("is not a function")) {
+      details = String(error.message); 
     }
     throw new Error(`Failed to update skills for user ${userId}. Details: ${details}`);
   }
@@ -384,6 +384,7 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     
 
     
+
 
 
 
