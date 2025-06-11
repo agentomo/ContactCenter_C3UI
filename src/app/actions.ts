@@ -163,19 +163,18 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
   const apiClient = await getAuthenticatedClient(); 
   const usersApi = new platformClient.UsersApi(apiClient);
 
-  console.log(`[actions.ts] updateUserSkills: Instance of usersApi created. Constructor: ${usersApi?.constructor?.name}`);
+  console.log(`[actions.ts] updateUserSkills: Instance of usersApi constructor name: ${usersApi?.constructor?.name}`);
 
-  // Log all enumerable properties on the instance itself
   let instanceKeys: string[] = [];
   if (usersApi) {
     for (const key in usersApi) {
-      // No Object.prototype.hasOwnProperty.call needed here for simple logging
-      instanceKeys.push(`${key} (type: ${typeof (usersApi as any)[key]})`);
+      if (Object.prototype.hasOwnProperty.call(usersApi, key)) {
+        instanceKeys.push(`${key} (type: ${typeof (usersApi as any)[key]})`);
+      }
     }
   }
   console.log(`[actions.ts] updateUserSkills: Enumerable keys on usersApi instance: ${instanceKeys.join(', ') || 'None'}`);
 
-  // Log methods from the prototype
   if (usersApi && Object.getPrototypeOf(usersApi)) {
     const prototype = Object.getPrototypeOf(usersApi);
     const prototypeMethods = Object.getOwnPropertyNames(prototype)
@@ -385,6 +384,7 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     
 
     
+
 
 
 
