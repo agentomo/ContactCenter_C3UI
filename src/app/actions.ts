@@ -160,8 +160,25 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
 }
 
 export async function updateUserSkills(userId: string, skillsToSet: UserRoutingSkillUpdateItem[]): Promise<UserRoutingSkill[]> {
-  const apiClient = await getAuthenticatedClient(); // Get the authenticated client instance
-  const usersApi = new platformClient.UsersApi(apiClient); // Explicitly pass the client to the UsersApi constructor
+  const apiClient = await getAuthenticatedClient(); 
+
+  console.log(`[actions.ts] updateUserSkills: typeof platformClient: ${typeof platformClient}`);
+  if (platformClient && typeof platformClient.UsersApi === 'function') {
+      console.log(`[actions.ts] updateUserSkills: typeof platformClient.UsersApi: ${typeof platformClient.UsersApi}`);
+      try {
+        const UsersApiPrototype = Object.getPrototypeOf(new platformClient.UsersApi(apiClient));
+        console.log(`[actions.ts] updateUserSkills: platformClient.UsersApi.prototype methods: ${UsersApiPrototype ? Object.getOwnPropertyNames(UsersApiPrototype).join(', ') : 'UsersApi.prototype is null/undefined'}`);
+        if (UsersApiPrototype && typeof (UsersApiPrototype as any).putUserRoutingskills !== 'function') {
+            console.warn('[actions.ts] updateUserSkills: putUserRoutingskills is NOT a function on UsersApi.prototype!');
+        }
+      } catch(protoError: any) {
+        console.error('[actions.ts] updateUserSkills: Error inspecting UsersApi prototype:', protoError.message);
+      }
+  } else {
+      console.error('[actions.ts] updateUserSkills: platformClient or platformClient.UsersApi is not as expected.');
+  }
+
+  const usersApi = new platformClient.UsersApi(apiClient);
 
   const apiFormattedSkills = skillsToSet.map(s => ({
     id: s.skillId, 
@@ -170,8 +187,9 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
   }));
 
   try {
-    // console.log(`[actions.ts] Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
-    // console.log(`[actions.ts] Type of usersApi.putUserRoutingskills: ${typeof (usersApi as any).putUserRoutingskills}`);
+    console.log(`[actions.ts] updateUserSkills: Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
+    console.log(`[actions.ts] updateUserSkills: Instance of usersApi: ${usersApi ? usersApi.constructor.name : 'null/undefined'}`);
+    console.log(`[actions.ts] updateUserSkills: typeof usersApi.putUserRoutingskills: ${typeof (usersApi as any).putUserRoutingskills}`);
     
     const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
     
@@ -195,9 +213,8 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
     } else if (error.response?.data?.message) { 
         details = error.response.data.message;
     }
-    // Add the original error type if it's "is not a function"
-    if (error.message && error.message.includes("is not a function")) {
-      details = error.message; // Prioritize this specific error message
+    if (error.message && error.message.toLowerCase().includes("is not a function")) {
+      details = error.message; 
     }
     throw new Error(`Failed to update skills for user ${userId}. Details: ${details}`);
   }
@@ -261,14 +278,14 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       const trimmedKey = dt.schema.key.trim();
       if (trimmedKey !== '') {
         determinedPrimaryKeyField = trimmedKey;
-        // console.log(`[actions.ts] Determined primary key for ${dataTableId} (name: ${dt.name}): '${determinedPrimaryKeyField}' from API value: '${dt.schema.key}'`);
+        console.log(`[actions.ts] getDataTableDetails: Determined primary key for ${dataTableId} (name: ${dt.name}): '${determinedPrimaryKeyField}' from API value: '${dt.schema.key}'`);
       } else {
-        console.warn(`[actions.ts] Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is an empty string after trimming. Original API value: '${dt.schema.key}'`);
+        console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is an empty string after trimming. Original API value: '${dt.schema.key}'`);
       }
     } else if (dt.schema) {
-      console.warn(`[actions.ts] Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is not a string. Value: '${dt.schema.key}', Type: ${typeof dt.schema.key}`);
+      console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is not a string or not present. Value: '${dt.schema.key}', Type: ${typeof dt.schema.key}`);
     } else {
-       console.warn(`[actions.ts] Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema is null or undefined.`);
+       console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema is null or undefined.`);
     }
         
     if (dt.schema?.properties) {
@@ -359,4 +376,5 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     
 
     
+
 
