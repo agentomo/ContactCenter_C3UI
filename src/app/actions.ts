@@ -245,16 +245,21 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); 
     
     const properties: Record<string, DataTableColumn> = {};
-    // Determine the primary key field from dt.schema.key.
-    // If dt.schema.key is null, undefined, or an empty string (after trimming), primaryKeyField will be undefined.
-    const determinedPrimaryKeyField = dt.schema?.key?.trim() ? dt.schema.key.trim() : undefined;
-
+    
+    let determinedPrimaryKeyField: string | undefined = undefined;
+    if (dt.schema && typeof dt.schema.key === 'string' && dt.schema.key.trim() !== '') {
+      determinedPrimaryKeyField = dt.schema.key.trim();
+    } else {
+      // Fallback or logging if needed, for now it remains undefined
+      console.warn(`Primary key for DataTable ${dataTableId} is not a non-empty string in dt.schema.key. API returned: '${dt.schema?.key}'`);
+    }
+    
     if (dt.schema?.properties) {
         for (const [colName, colDefinition] of Object.entries(dt.schema.properties as Record<string, {type: string | {type: string}} >)) {
-            let columnType = 'string'; // Default to string
+            let columnType = 'string'; 
             if (typeof colDefinition.type === 'string') {
                 columnType = colDefinition.type;
-            } else if (typeof colDefinition.type === 'object' && colDefinition.type?.type === 'string') { // Added null check for colDefinition.type
+            } else if (colDefinition.type && typeof colDefinition.type === 'object' && typeof colDefinition.type.type === 'string') {
                  columnType = colDefinition.type.type; 
             }
             

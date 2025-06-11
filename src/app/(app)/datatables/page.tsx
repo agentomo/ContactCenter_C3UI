@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from "@/hooks/use-toast";
-import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle } from 'lucide-react'; // Removed PlusCircle for now
+import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const TARGET_DATATABLE_NAME = "CG_SHSV_DynamicPrompt";
@@ -93,7 +93,7 @@ export default function DataTablesPage() {
 
     startLoadingRows(async () => {
       try {
-        const rows = await getDataTableRows(tableId, true); // showEmptyFields = true
+        const rows = await getDataTableRows(tableId, true); 
         setDataTableRows(rows);
       } catch (error: any) {
         toast({
@@ -126,18 +126,13 @@ export default function DataTablesPage() {
     const pkField = dataTableDetails.primaryKeyField;
     const allColumnNames = Object.keys(dataTableDetails.schema.properties);
   
-    // Create a sorted list of all column names
     const sortedAllColumnNames = [...allColumnNames].sort((a, b) => a.localeCompare(b));
   
     if (pkField && sortedAllColumnNames.includes(pkField)) {
-      // If pkField exists and is in the list, remove it from its current sorted position
-      // and prepend it to the list.
       const index = sortedAllColumnNames.indexOf(pkField);
-      sortedAllColumnNames.splice(index, 1); // Remove PK from sorted list
-      return [pkField, ...sortedAllColumnNames]; // Prepend PK
+      sortedAllColumnNames.splice(index, 1); 
+      return [pkField, ...sortedAllColumnNames]; 
     }
-    // If no pkField or pkField is not in properties (should not happen if schema is consistent),
-    // return the alphabetically sorted list of all columns.
     return sortedAllColumnNames;
   }, [dataTableDetails]);
   
@@ -179,7 +174,6 @@ export default function DataTablesPage() {
     
     const rowDataPayload: Partial<DataTableRow> = { ...editedRowData };
 
-    // Convert NaN to null for numeric fields before sending
     for (const key in rowDataPayload) {
       if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
         if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
@@ -188,9 +182,6 @@ export default function DataTablesPage() {
       }
     }
         
-    // Ensure the primary key value is included (though it shouldn't be modified by the form)
-    // The API expects the PK as part of the payload for updates in some cases, or uses rowId path param.
-    // Here, updateDataTableRow uses rowId path param, but including it in payload is often harmless or even required by SDK.
     rowDataPayload[dataTableDetails.primaryKeyField] = editingRowId;
 
 
@@ -273,7 +264,10 @@ export default function DataTablesPage() {
                     <p className="text-xs text-muted-foreground mt-1">Primary Key: <strong className="text-primary/90">{dataTableDetails.primaryKeyField}</strong></p>
                   )}
                 {!dataTableDetails?.primaryKeyField && !isLoadingDetails && dataTableDetails && (
-                  <p className="text-xs text-destructive mt-1 font-semibold">Warning: Primary key not identified. Editing will be disabled.</p>
+                  <p className="text-xs text-destructive mt-1 font-semibold">
+                    Warning: Primary key not identified by the API for this table. Editing will be disabled. 
+                    (Ensure a primary key is set in Genesys Cloud for "{TARGET_DATATABLE_NAME}".)
+                  </p>
                 )}
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
@@ -333,7 +327,7 @@ export default function DataTablesPage() {
                           return (
                             <TableRow key={currentPkValue}>
                               {orderedColumnNames.map(colName => (
-                                <TableCell key={`cell-${rowIndex}-${colName}`} className={colName === dataTableDetails?.primaryKeyField ? 'font-semibold' : ''}>
+                                <TableCell key={`cell-${rowIndex}-${colName}`} className={colName === dataTableDetails?.primaryKeyField ? 'font-semibold text-primary/80' : ''}>
                                   {typeof row[colName] === 'boolean' ? row[colName] ? 'True' : 'False' :
                                    row[colName] === null || row[colName] === undefined ? <span className="text-muted-foreground italic">empty</span> : String(row[colName])}
                                 </TableCell>
@@ -345,7 +339,7 @@ export default function DataTablesPage() {
                                   className="h-8 w-8" 
                                   disabled={isSubmitting || isEditDialogOpen || !dataTableDetails?.primaryKeyField} 
                                   onClick={() => handleEdit(row)} 
-                                  title={!dataTableDetails?.primaryKeyField ? "Edit disabled: No primary key defined" : "Edit row"}
+                                  title={!dataTableDetails?.primaryKeyField ? "Edit disabled: No primary key defined by API" : "Edit row"}
                                 >
                                   <Edit3 className="h-4 w-4" />
                                 </Button>
@@ -370,7 +364,6 @@ export default function DataTablesPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
-                {/* Display Primary Key Field (Non-Editable) First if it exists */}
                 {editedRowData && dataTableDetails?.primaryKeyField && dataTableDetails.schema.properties[dataTableDetails.primaryKeyField] && (
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor={dataTableDetails.primaryKeyField} className="text-right col-span-1 font-semibold">
@@ -382,7 +375,6 @@ export default function DataTablesPage() {
                     </div>
                  )}
 
-                {/* Editable Fields */}
                 {editedRowData && dataTableDetails && dataTableDetails.schema.properties &&
                   Object.entries(dataTableDetails.schema.properties)
                     .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) 
