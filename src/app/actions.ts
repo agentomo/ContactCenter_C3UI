@@ -357,7 +357,6 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
     const body = { ...rowData };
     console.log(`[actions.ts] addDataTableRow: Adding row to table ${dataTableId} with key ${String(rowKey)} and data:`, JSON.stringify(body, null, 2));
     try {
-        // Pass rowData directly, SDK should handle structure.
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
         return newRow as DataTableRow; 
     } catch (error: any) {
@@ -376,16 +375,12 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    // Create a fresh copy of rowData to ensure no unexpected mutations if the SDK modifies the object passed to it.
-    const bodyForApi = { ...rowData };
+    const bodyForApi = { ...rowData }; 
 
-    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}.`);
-    // The original rowData (received from client) is already logged by the client-side calling this action.
-    // Log the body that will actually be sent to the SDK.
-    console.log(`[actions.ts] updateDataTableRow: Sending API body (direct copy of received):`, JSON.stringify(bodyForApi, null, 2));
+    console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
+    console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(bodyForApi, null, 2));
     
     try {
-        // Pass the fresh copy of rowData directly.
         const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, bodyForApi);
         return updatedRow as DataTableRow;
     } catch (error: any) {
@@ -394,7 +389,6 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
         if (error.body?.details?.[0]?.errorMessage) {
             details += ` (${error.body.details[0].errorMessage})`;
         } else if (error.body?.code === 'flows.datatables.syntax.error' && error.status === 400) {
-            // The error we've been seeing
             details = `Syntax error with the provided data. The API rejected the row item. (Original msg: ${error.body?.message || 'N/A'})`;
         }
         throw new Error(`Failed to update row ${rowId} in DataTable ${dataTableId}. Details: ${details}`);
@@ -425,16 +419,22 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   const routingApi = new platformClient.RoutingApi();
 
   let activeQueuesEntities: any[] = [];
+  const apiOptions = {
+    pageSize: 200,
+    pageNumber: 1,
+    state: 'active' as 'active' | 'inactive' | 'deleted', // Added type assertion for clarity
+    name: '%', 
+    expand: ['division'], 
+  };
+
+  console.log('[actions.ts] getActiveQueues: API call parameters:', JSON.stringify(apiOptions, null, 2));
+
   try {
-    const queuesResponse = await routingApi.getRoutingQueues({
-      pageSize: 200,
-      pageNumber: 1,
-      state: 'active',
-      name: '%', 
-      expand: ['division'], 
-    });
+    const queuesResponse = await routingApi.getRoutingQueues(apiOptions);
     activeQueuesEntities = queuesResponse.entities || [];
-    console.log(`[actions.ts] getActiveQueues: Initial fetch found ${activeQueuesEntities.length} queues from API. Details: ${JSON.stringify(activeQueuesEntities.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
+    console.log(`[actions.ts] getActiveQueues: Initial fetch found ${activeQueuesEntities.length} queues from API.`);
+    // Removed detailed logging of all queue data by default to keep console cleaner. Can be re-added if needed for specific debugging.
+    // console.log(`[actions.ts] getActiveQueues: Details: ${JSON.stringify(activeQueuesEntities.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
 
   } catch (error: any) {
     console.error('[actions.ts] getActiveQueues: Error fetching active queues:', error.body || error.message);
@@ -456,3 +456,4 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
     
+
