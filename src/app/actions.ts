@@ -39,14 +39,14 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
   const region = process.env.GENESYS_REGION;
 
   if (!clientId || !clientSecret || !region) {
-    console.error('Genesys Cloud API credentials or region not configured.');
+    console.error('[actions.ts] Genesys Cloud API credentials or region not configured.');
     throw new Error('API credentials or region not configured. Please set GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION in your .env.local file.');
   }
 
   const client = platformClient.ApiClient.instance;
   const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
   if (!regionHost) {
-    console.error(`Invalid Genesys Cloud region: ${region}.`);
+    console.error(`[actions.ts] Invalid Genesys Cloud region: ${region}.`);
     throw new Error(`Invalid Genesys Cloud region specified: "${region}".`);
   }
   
@@ -54,9 +54,9 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     client.setEnvironment(regionHost);
     try {
       await client.loginClientCredentialsGrant(clientId, clientSecret);
-      console.log('Successfully authenticated with Genesys Cloud API.');
+      console.log('[actions.ts] Successfully authenticated with Genesys Cloud API.');
     } catch (authError: any) {
-      console.error('Genesys Cloud authentication failed:', authError.message || authError);
+      console.error('[actions.ts] Genesys Cloud authentication failed:', authError.message || authError);
       let errorMessage = 'Genesys Cloud authentication failed.';
       if (authError.message?.includes('invalid_client')) {
         errorMessage = 'Genesys Cloud authentication failed: Invalid client ID or secret, or client not authorized for client_credential grant.';
@@ -82,7 +82,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     });
 
     if (!userResponse.entities) {
-      console.log('No users found or an issue with the API response.');
+      console.log('[actions.ts] No users found or an issue with the API response.');
       return [];
     }
 
@@ -93,10 +93,10 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
       divisionId: user.division?.id || 'N/A',
       divisionName: user.division?.name || 'N/A',
     }));
-    console.log(`Fetched and mapped ${mappedUsers.length} users.`);
+    // console.log(`[actions.ts] Fetched and mapped ${mappedUsers.length} users.`);
     return mappedUsers;
   } catch (error: any) {
-    console.error('Error fetching or processing Genesys Cloud user data (full error object):', error);
+    console.error('[actions.ts] Error fetching or processing Genesys Cloud user data (full error object):', error);
     let detailedErrorMessage = 'An unknown error occurred while fetching user data.';
      if (error.body && error.body.message) {
         detailedErrorMessage = error.body.message;
@@ -136,7 +136,7 @@ export async function getAllSkills(): Promise<SkillDefinition[]> {
       name: skill.name!,
     })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error('Error fetching all skills:', error.body || error.message);
+    console.error('[actions.ts] Error fetching all skills:', error.body || error.message);
     throw new Error(`Failed to fetch skills from Genesys Cloud. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -154,14 +154,15 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error(`Error fetching skills for user ${userId}:`, error.body || error.message);
+    console.error(`[actions.ts] Error fetching skills for user ${userId}:`, error.body || error.message);
     throw new Error(`Failed to fetch skills for user ${userId}. Details: ${error.body?.message || error.message}`);
   }
 }
 
 export async function updateUserSkills(userId: string, skillsToSet: UserRoutingSkillUpdateItem[]): Promise<UserRoutingSkill[]> {
-  await getAuthenticatedClient();
-  const usersApi = new platformClient.UsersApi();
+  const apiClient = await getAuthenticatedClient(); // Get the authenticated client instance
+  const usersApi = new platformClient.UsersApi(apiClient); // Explicitly pass the client to the UsersApi constructor
+
   const apiFormattedSkills = skillsToSet.map(s => ({
     id: s.skillId, 
     proficiency: s.proficiency,
@@ -169,7 +170,11 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
   }));
 
   try {
+    // console.log(`[actions.ts] Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
+    // console.log(`[actions.ts] Type of usersApi.putUserRoutingskills: ${typeof (usersApi as any).putUserRoutingskills}`);
+    
     const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
+    
     return (updatedSkillsData.entities || [])
       .filter(skill => skill.id && skill.name && skill.proficiency !== undefined)
       .map(skill => ({
@@ -178,7 +183,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error(`Error updating skills for user ${userId}:`, error.body || error.message);
+    console.error(`[actions.ts] Error updating skills for user ${userId}:`, error.body || error.message, error);
     let details = error.message;
     if (error.body && error.body.message) {
         details = error.body.message;
@@ -189,6 +194,10 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         }
     } else if (error.response?.data?.message) { 
         details = error.response.data.message;
+    }
+    // Add the original error type if it's "is not a function"
+    if (error.message && error.message.includes("is not a function")) {
+      details = error.message; // Prioritize this specific error message
     }
     throw new Error(`Failed to update skills for user ${userId}. Details: ${details}`);
   }
@@ -233,7 +242,7 @@ export async function getDataTables(): Promise<DataTable[]> {
       description: dt.description,
     }));
   } catch (error: any) {
-    console.error('Error fetching DataTables:', error.body || error.message);
+    console.error('[actions.ts] Error fetching DataTables:', error.body || error.message);
     throw new Error(`Failed to fetch DataTables from Genesys Cloud. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -247,13 +256,21 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const properties: Record<string, DataTableColumn> = {};
     
     let determinedPrimaryKeyField: string | undefined = undefined;
-    if (dt.schema && typeof dt.schema.key === 'string' && dt.schema.key.trim() !== '') {
-      determinedPrimaryKeyField = dt.schema.key.trim();
+
+    if (dt.schema && typeof dt.schema.key === 'string') {
+      const trimmedKey = dt.schema.key.trim();
+      if (trimmedKey !== '') {
+        determinedPrimaryKeyField = trimmedKey;
+        // console.log(`[actions.ts] Determined primary key for ${dataTableId} (name: ${dt.name}): '${determinedPrimaryKeyField}' from API value: '${dt.schema.key}'`);
+      } else {
+        console.warn(`[actions.ts] Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is an empty string after trimming. Original API value: '${dt.schema.key}'`);
+      }
+    } else if (dt.schema) {
+      console.warn(`[actions.ts] Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is not a string. Value: '${dt.schema.key}', Type: ${typeof dt.schema.key}`);
     } else {
-      // Fallback or logging if needed, for now it remains undefined
-      console.warn(`Primary key for DataTable ${dataTableId} is not a non-empty string in dt.schema.key. API returned: '${dt.schema?.key}'`);
+       console.warn(`[actions.ts] Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema is null or undefined.`);
     }
-    
+        
     if (dt.schema?.properties) {
         for (const [colName, colDefinition] of Object.entries(dt.schema.properties as Record<string, {type: string | {type: string}} >)) {
             let columnType = 'string'; 
@@ -284,7 +301,7 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       primaryKeyField: determinedPrimaryKeyField,
     };
   } catch (error: any) {
-    console.error(`Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
+    console.error(`[actions.ts] Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch DataTable details for ${dataTableId}. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -298,8 +315,9 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
       showbrief: !showEmptyFields 
     });
     return result.entities || []; 
-  } catch (error: any) {
-    console.error(`Error fetching rows for DataTable ${dataTableId}:`, error.body || error.message);
+  } catch (error: any)
+{
+    console.error(`[actions.ts] Error fetching rows for DataTable ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch rows for DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -311,7 +329,7 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData);
         return newRow as DataTableRow; 
     } catch (error: any) {
-        console.error(`Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
+        console.error(`[actions.ts] Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
         throw new Error(`Failed to add row to DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
 }
@@ -323,7 +341,7 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
         const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, rowData);
         return updatedRow as DataTableRow;
     } catch (error: any) {
-        console.error(`Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message);
+        console.error(`[actions.ts] Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message);
         throw new Error(`Failed to update row ${rowId} in DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
 }
@@ -334,10 +352,11 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     try {
         await architectApi.deleteFlowsDatatableRow(dataTableId, rowId);
     } catch (error: any) {
-        console.error(`Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
+        console.error(`[actions.ts] Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
         throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
 }
     
 
     
+
