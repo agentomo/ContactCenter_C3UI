@@ -179,7 +179,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, error.body || error.message, error);
+    console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, error.body || error.message);
     let details = error.message;
     if (error.body && error.body.message) {
         details = error.body.message;
@@ -252,13 +252,7 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       const trimmedKey = dt.schema.key.trim();
       if (trimmedKey !== '') {
         determinedPrimaryKeyField = trimmedKey;
-      } else {
-        console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is an empty string after trimming. Original API value: '${dt.schema.key}'`);
       }
-    } else if (dt.schema) {
-       console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is not a string or not present. Value: '${dt.schema.key}', Type: ${typeof dt.schema.key}`);
-    } else {
-       console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema is null or undefined.`);
     }
         
     if (dt.schema?.properties) {
@@ -363,4 +357,108 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
         console.error(`[actions.ts] deleteDataTableRow: Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
         throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
+}
+
+// --- Queue Observation Types and Actions ---
+export interface QueueObservationData {
+  id: string;
+  name: string;
+  divisionId?: string;
+  divisionName?: string;
+  onQueueUserCount: number;
+  interactingCount: number;
+  waitingCount: number;
+}
+
+export async function getQueueObservations(): Promise<QueueObservationData[]> {
+  await getAuthenticatedClient();
+  const routingApi = new platformClient.RoutingApi();
+  const analyticsApi = new platformClient.AnalyticsApi();
+
+  let activeQueues: any[] = [];
+  try {
+    const queuesResponse = await routingApi.getRoutingQueues({
+      pageSize: 200,
+      pageNumber: 1,
+      state: 'active',
+      name: '%', // Wildcard to fetch all active queues
+      expand: ['division'],
+    });
+    activeQueues = queuesResponse.entities || [];
+    console.log(`[actions.ts] getQueueObservations: Found ${activeQueues.length} active queues.`);
+  } catch (error: any) {
+    console.error('[actions.ts] getQueueObservations: Error fetching active queues:', error.body || error.message);
+    throw new Error(`Failed to retrieve active queues from Genesys Cloud. Details: ${error.body?.message || error.message}.`);
+  }
+
+  if (activeQueues.length === 0) {
+    console.warn('[actions.ts] getQueueObservations: No queues found with state "active". This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
+    return [];
+  }
+
+  const queueDataMap: Map<string, QueueObservationData> = new Map(
+    activeQueues.map(q => [
+      q.id!,
+      {
+        id: q.id!,
+        name: q.name!,
+        divisionId: q.division?.id,
+        divisionName: q.division?.name,
+        onQueueUserCount: 0,
+        interactingCount: 0,
+        waitingCount: 0,
+      },
+    ])
+  );
+
+  const observationQuery = {
+    filter: {
+      type: 'or',
+      predicates: activeQueues.map(q => ({
+        type: 'dimension',
+        dimension: 'queueId',
+        operator: 'matches',
+        value: q.id,
+      })),
+    },
+    metrics: ['oOnQueueUsers', 'oInteracting', 'oWaiting'],
+  };
+
+  try {
+    if (activeQueues.length > 0) {
+      const observationResult: any = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery);
+      if (observationResult && observationResult.results) {
+        observationResult.results.forEach((result: any) => {
+          const queueId = result.group.queueId;
+          const queueEntry = queueDataMap.get(queueId);
+          if (queueEntry) {
+            result.data.forEach((metricData: any) => {
+              switch (metricData.metric) {
+                case 'oOnQueueUsers':
+                  queueEntry.onQueueUserCount = metricData.stats?.count || 0;
+                  break;
+                case 'oInteracting':
+                  queueEntry.interactingCount = metricData.stats?.count || 0;
+                  break;
+                case 'oWaiting':
+                  queueEntry.waitingCount = metricData.stats?.count || 0;
+                  break;
+              }
+            });
+          }
+        });
+        console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${observationResult.results.length} queues.`);
+      } else {
+         console.warn('[actions.ts] getQueueObservations: No observation data returned from analytics query, or results were empty. Queues will be shown with default 0 metrics.');
+      }
+    }
+  } catch (error: any) {
+    console.error('[actions.ts] getQueueObservations: Error fetching queue observation metrics:', error.body || error.message);
+    // Do not throw an error here; allow returning queues with default 0 metrics
+    console.warn('[actions.ts] getQueueObservations: Proceeding to return active queues with default 0 metrics due to an error in fetching live observation data.');
+  }
+
+  const allQueuesWithData = Array.from(queueDataMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  console.log(`[actions.ts] getQueueObservations: Returning ${allQueuesWithData.length} total active queues (metrics may be defaulted if live data was unavailable).`);
+  return allQueuesWithData;
 }

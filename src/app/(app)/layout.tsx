@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ListTodo, Users, Menu, Database } from 'lucide-react'; // Added Database icon
+import { LayoutDashboard, ListTodo, Users, Menu, Database, LayoutList } from 'lucide-react'; 
 
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +25,7 @@ const navItems = [
   { href: '/', label: 'Status Board', icon: LayoutDashboard },
   { href: '/skills', label: 'Skills Management', icon: ListTodo },
   { href: '/datatables', label: 'DataTables', icon: Database },
+  { href: '/queues', label: 'Queues', icon: LayoutList }, // Added Queues link
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -64,7 +65,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false} // Ensure Button renders as a button, not a Slot here
+                        asChild={false} 
                       >
                         <a> {/* Inner <a> for legacyBehavior + passHref */}
                           <item.icon className="h-5 w-5" />
@@ -102,30 +103,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
-// Dummy SidebarMenuButton component used for desktop navigation items.
-// This local version specifically handles the 'asChild' prop from <Link asChild>.
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
 >(({ children, isActive, tooltip, ...allOtherPropsFromParent }, ref) => {
 
-  // allOtherPropsFromParent includes href, onClick, and asChild (from Link).
-  // Destructure 'asChild' out, so it's not passed to the ShadCN Button.
   const { asChild: _asChildFromLink, ...propsToPassToShadCNButton } = allOtherPropsFromParent;
-  // Now, propsToPassToShadCNButton contains props like href, onClick, but NOT _asChildFromLink.
-
-  // The 'tooltip' prop is destructured but not actively used by this simplified local component.
-  // It's kept for signature consistency with other potential SidebarMenuButton versions.
-  // Actual tooltip rendering would require TooltipProvider, Tooltip, TooltipTrigger, TooltipContent.
 
   return (
-    <Button
+    <Button // This is the ShadCN UI Button
       ref={ref}
       variant={isActive ? 'secondary' : 'ghost'}
-      {...propsToPassToShadCNButton} // Spread props that explicitly exclude 'asChild'
+      {...propsToPassToShadCNButton} 
     >
       {children}
     </Button>
   );
 });
 SidebarMenuButton.displayName = "SidebarMenuButton";
+
