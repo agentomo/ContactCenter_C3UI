@@ -158,7 +158,12 @@ export default function DataTablesPage() {
       toast({ title: "Error", description: "Primary key field not defined for this table. Editing is disabled.", variant: "destructive" });
       return;
     }
-    const pkValue = String(row[dataTableDetails.primaryKeyField]); 
+    const pkField = dataTableDetails.primaryKeyField;
+    const pkValue = String(row[pkField]); 
+    
+    // CRUCIAL LOG: Check what is being used as the primary key value
+    console.log(`[DataTablesPage] handleEdit: Primary Key Field Name: '${pkField}', Primary Key Value for this row: '${pkValue}'`);
+
     setEditingRowId(pkValue); 
     setEditedRowData({ ...row }); 
     setIsEditDialogOpen(true);
@@ -187,16 +192,20 @@ export default function DataTablesPage() {
   };
 
   const handleSaveEdit = () => {
-    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties) {
+    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties || !dataTableDetails?.primaryKeyField) {
       toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, or schema).", variant: "destructive" });
       return;
     }
     
     const payloadForUpdate: DataTableRow = {};
     const schemaProperties = dataTableDetails.schema.properties;
+    const pkField = dataTableDetails.primaryKeyField;
 
     for (const key in schemaProperties) {
         if (Object.prototype.hasOwnProperty.call(schemaProperties, key)) {
+            if (key === pkField) { // Exclude the primary key from the body
+                continue;
+            }
             let value = editedRowData[key];
 
             if (value === undefined) { 
@@ -204,7 +213,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 payloadForUpdate[key] = null; 
             } else if (typeof value === 'boolean') {
-                payloadForUpdate[key] = String(value); // Convert boolean to "true" or "false"
+                payloadForUpdate[key] = value; // Send actual boolean
             }
             else {
                 payloadForUpdate[key] = value;
@@ -212,7 +221,7 @@ export default function DataTablesPage() {
         }
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS PRESENT, PK INCLUDED, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (PK EXCLUDED from body, native booleans):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -241,8 +250,6 @@ export default function DataTablesPage() {
       if (colSchema?.type === 'boolean') {
         initialData[colName] = false; // Initialize actual booleans as false
       } else if (colSchema?.type === 'string') {
-        // For strings that might represent booleans, initialize as empty string or based on actual use case
-        // If they are meant to be 'true'/'false' strings, initialize as 'false' string or empty
         initialData[colName] = ''; 
       } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
         initialData[colName] = null; 
@@ -290,7 +297,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 rowDataPayload[key] = null;
             } else if (typeof value === 'boolean') {
-                rowDataPayload[key] = String(value); // Convert boolean to "true" or "false"
+                rowDataPayload[key] = value; // Send actual boolean
             }
             else {
                 rowDataPayload[key] = value;
@@ -298,7 +305,7 @@ export default function DataTablesPage() {
         }
     }
     
-    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT, Booleans as STRINGS):", JSON.stringify(rowDataPayload, null, 2));
+    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT, native booleans):", JSON.stringify(rowDataPayload, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -542,7 +549,6 @@ export default function DataTablesPage() {
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
                       } else if (colSchema.type === 'string') {
-                        // Check current value (which might be an actual boolean from previous edits, or string from API)
                         const lowerCurrentValue = String(currentValue).toLowerCase();
                         if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
                           treatAsBooleanInput = true;
@@ -558,8 +564,8 @@ export default function DataTablesPage() {
                             {treatAsBooleanInput ? (
                               <Checkbox
                                 id={`edit-${colName}`}
-                                checked={String(currentValue).toLowerCase() === 'true'} // Always compare as string
-                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')} // Store as actual boolean
+                                checked={String(currentValue).toLowerCase() === 'true'}
+                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')} 
                                 disabled={isSubmitting}
                                 aria-label={`Edit ${colName}`}
                               />
@@ -621,14 +627,6 @@ export default function DataTablesPage() {
                       let treatAsBooleanInput = false;
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
-                      } else if (colSchema.type === 'string') {
-                        // For string types that we might want to treat as boolean inputs initially
-                        // Example: if you want a new string field that represents a boolean to start with a checkbox
-                        // This part depends on how you want to initialize them. For now, just check schema type for consistency.
-                        // const lowerCurrentValue = String(currentValue).toLowerCase();
-                        // if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
-                        //     treatAsBooleanInput = true;
-                        // }
                       }
                       
                       return (
@@ -637,10 +635,10 @@ export default function DataTablesPage() {
                             {colName} {isPrimaryKey ? '(Key)' : ''} ({colSchema.type})
                           </Label>
                           <div className="col-span-3">
-                            {treatAsBooleanInput ? ( // Based on schema type 'boolean' for new rows
+                            {treatAsBooleanInput ? ( 
                               <Checkbox
                                 id={`create-${colName}`}
-                                checked={!!currentValue} // currentValue is already initialized to boolean `false` for schema type 'boolean'
+                                checked={!!currentValue} 
                                 onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'create')}
                                 disabled={isSubmitting}
                                 aria-label={`Create ${colName}`}
@@ -696,4 +694,6 @@ export default function DataTablesPage() {
     </div>
   );
 }
+    
+
     
