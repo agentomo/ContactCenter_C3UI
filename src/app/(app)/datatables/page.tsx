@@ -35,7 +35,7 @@ import { toast } from "@/hooks/use-toast";
 import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const TARGET_DATATABLE_NAME = "CG_SHSV_DynamicPrompt";
+const TARGET_DATATABLE_NAME = "WFMAbsenceBOT";
 
 export default function DataTablesPage() {
   const [dataTableDetails, setDataTableDetails] = useState<DataTableDetails | null>(null);
