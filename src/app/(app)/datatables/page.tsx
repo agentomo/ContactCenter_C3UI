@@ -161,7 +161,6 @@ export default function DataTablesPage() {
     const pkField = dataTableDetails.primaryKeyField;
     const pkValue = String(row[pkField]); 
     
-    // CRUCIAL LOG: Check what is being used as the primary key value
     console.log(`[DataTablesPage] handleEdit: Primary Key Field Name: '${pkField}', Primary Key Value for this row: '${pkValue}'`);
 
     setEditingRowId(pkValue); 
@@ -192,36 +191,33 @@ export default function DataTablesPage() {
   };
 
   const handleSaveEdit = () => {
-    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties || !dataTableDetails?.primaryKeyField) {
+    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties) {
       toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, or schema).", variant: "destructive" });
       return;
     }
     
     const payloadForUpdate: DataTableRow = {};
     const schemaProperties = dataTableDetails.schema.properties;
-    const pkField = dataTableDetails.primaryKeyField;
 
-    for (const key in schemaProperties) {
-        if (Object.prototype.hasOwnProperty.call(schemaProperties, key)) {
-            if (key === pkField) { // Exclude the primary key from the body
-                continue;
-            }
-            let value = editedRowData[key];
+    for (const keyInSchema in schemaProperties) {
+        if (Object.prototype.hasOwnProperty.call(schemaProperties, keyInSchema)) {
+            // For updates, we send the complete row data, including the PK.
+            let value = editedRowData[keyInSchema];
 
             if (value === undefined) { 
-                payloadForUpdate[key] = null;
+                payloadForUpdate[keyInSchema] = null;
             } else if (typeof value === 'number' && Number.isNaN(value)) {
-                payloadForUpdate[key] = null; 
+                payloadForUpdate[keyInSchema] = null; 
             } else if (typeof value === 'boolean') {
-                payloadForUpdate[key] = value; // Send actual boolean
+                payloadForUpdate[keyInSchema] = value; // Send actual boolean
             }
             else {
-                payloadForUpdate[key] = value;
+                payloadForUpdate[keyInSchema] = value;
             }
         }
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (PK EXCLUDED from body, native booleans):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS INCLUDED, native booleans):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -248,7 +244,7 @@ export default function DataTablesPage() {
     Object.keys(dataTableDetails.schema.properties).forEach(colName => {
       const colSchema = getColumnSchema(colName);
       if (colSchema?.type === 'boolean') {
-        initialData[colName] = false; // Initialize actual booleans as false
+        initialData[colName] = false; 
       } else if (colSchema?.type === 'string') {
         initialData[colName] = ''; 
       } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
@@ -297,7 +293,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 rowDataPayload[key] = null;
             } else if (typeof value === 'boolean') {
-                rowDataPayload[key] = value; // Send actual boolean
+                rowDataPayload[key] = value; 
             }
             else {
                 rowDataPayload[key] = value;
@@ -694,6 +690,8 @@ export default function DataTablesPage() {
     </div>
   );
 }
+    
+
     
 
     
