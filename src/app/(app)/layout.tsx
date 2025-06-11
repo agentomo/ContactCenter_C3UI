@@ -42,6 +42,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </h2>
           </Link>
 
+          {/* Mobile Menu */}
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
@@ -63,9 +64,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false}
+                        asChild={false} 
                       >
-                        <a> 
+                        <a>
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
                         </a>
@@ -77,10 +78,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </SheetContent>
           </Sheet>
           
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-2">
             {navItems.map((item) => (
               <Link key={item.href} href={item.href} asChild>
-                <SidebarMenuButton // Using SidebarMenuButton directly for consistency if needed, or just Button
+                <SidebarMenuButton 
                   isActive={pathname === item.href}
                   tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
                 >
@@ -99,16 +101,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
     </div>
   );
 }
-// Dummy SidebarMenuButton component to satisfy the type checker if not imported from a real sidebar.
-// In a real scenario, this would be imported or Link would wrap a standard Button.
+
+// Dummy SidebarMenuButton component used for desktop navigation items.
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
 >(({ children, isActive, tooltip, ...props }, ref) => {
-  // This is a simplified placeholder.
-  // If using ShadCN Button, ensure it handles props correctly when wrapped by Link asChild.
+  // Destructure asChild from props and don't pass it to the Button component
+  // to prevent the "React does not recognize the `asChild` prop on a DOM element" warning.
+  const { asChild, ...restProps } = props; 
+  
+  // The Tooltip component is not used here for simplicity in the dummy component,
+  // but in a real scenario, you might want to wrap the Button with Tooltip logic
+  // similar to how it's done in the actual SidebarMenuButton from @/components/ui/sidebar.
+  // For now, we ignore the tooltip prop for this dummy version.
+  
   return (
-    <Button ref={ref} variant={isActive ? 'secondary' : 'ghost'} {...props}>
+    <Button ref={ref} variant={isActive ? 'secondary' : 'ghost'} {...restProps}>
       {children}
     </Button>
   );
