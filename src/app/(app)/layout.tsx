@@ -64,9 +64,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false} // Ensure Button itself doesn't expect Slot behavior here
+                        asChild={false} 
                       >
-                        <a> {/* Explicit anchor for legacyBehavior + passHref pattern */}
+                        <a> 
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
                         </a>
