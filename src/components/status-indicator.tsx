@@ -1,4 +1,5 @@
 
+import React from 'react';
 import type { UserStatus } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import { CheckCircle2, XCircle, CircleSlash, Clock, UserMinus, Briefcase } from 'lucide-react';
@@ -56,3 +57,4 @@ export function StatusIndicator({ status }: StatusIndicatorProps) {
     </div>
   );
 }
+
