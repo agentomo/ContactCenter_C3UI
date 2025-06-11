@@ -179,7 +179,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, error.body || error.message);
+    // console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, error.body || error.message);
     let details = error.message;
     if (error.body && error.body.message) {
         details = error.body.message;
@@ -285,7 +285,7 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       primaryKeyField: determinedPrimaryKeyField,
     };
   } catch (error: any) {
-    console.error(`[actions.ts] getDataTableDetails: Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
+    // console.error(`[actions.ts] getDataTableDetails: Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch DataTable details for ${dataTableId}. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -385,7 +385,7 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
       expand: ['division'],
     });
     activeQueues = queuesResponse.entities || [];
-    console.log(`[actions.ts] getQueueObservations: Found ${activeQueues.length} active queues.`);
+    console.log(`[actions.ts] getQueueObservations: Initial fetch found ${activeQueues.length} queues from API. Details: ${JSON.stringify(activeQueues.map(q => ({id: q.id, name: q.name, division: q.division?.name})))}`);
   } catch (error: any) {
     console.error('[actions.ts] getQueueObservations: Error fetching active queues:', error.body || error.message);
     // If fetching the list of active queues fails, it should throw an error, as there's nothing to show.
@@ -395,7 +395,7 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
   // If no active queues are found at all, return an empty array.
   // The frontend will then display the "No Queue Data Available" message.
   if (activeQueues.length === 0) {
-    console.warn('[actions.ts] getQueueObservations: No queues found with state "active". This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
+    console.warn('[actions.ts] getQueueObservations: No queues found with state "active" (or visible to OAuth client). This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
     return [];
   }
 
@@ -451,7 +451,7 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
             });
           }
         });
-        console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${observationResult.results.length} queues that had metrics.`);
+        // console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${observationResult.results.length} queues that had metrics.`);
       } else {
          console.warn('[actions.ts] getQueueObservations: No observation data returned from analytics query, or results were empty. Active queues will be shown with default 0 metrics.');
       }
@@ -467,7 +467,7 @@ export async function getQueueObservations(): Promise<QueueObservationData[]> {
   // This will return all queues that were initially identified as 'active',
   // with metrics populated if available, or defaulted to 0 otherwise.
   const allQueuesWithData = Array.from(queueDataMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  console.log(`[actions.ts] getQueueObservations: Returning ${allQueuesWithData.length} total active queues (metrics may be defaulted if live data was unavailable for some/all).`);
+  // console.log(`[actions.ts] getQueueObservations: Returning ${allQueuesWithData.length} total active queues (metrics may be defaulted if live data was unavailable for some/all).`);
   return allQueuesWithData;
 }
 
