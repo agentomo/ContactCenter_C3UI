@@ -64,9 +64,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false} 
+                        asChild={false}
                       >
-                        <a> 
+                        <a>
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
                         </a>
@@ -77,12 +77,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </nav>
             </SheetContent>
           </Sheet>
-          
+
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-2">
             {navItems.map((item) => (
               <Link key={item.href} href={item.href} asChild>
-                <SidebarMenuButton 
+                <SidebarMenuButton
                   isActive={pathname === item.href}
                   tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
                 >
@@ -107,18 +107,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
->(({ children, isActive, tooltip, ...props }, ref) => {
-  // Destructure asChild from props (passed by <Link asChild>)
-  // and ensure it's not passed to the underlying ShadCN Button component
-  // to prevent the "React does not recognize the `asChild` prop on a DOM element" warning.
-  const { asChild, ...restProps } = props; 
-  
-  // The Tooltip component is not used here for simplicity in this dummy component.
-  // In a real scenario, you might wrap the Button with Tooltip logic.
+>(({ children, isActive, tooltip, ...incomingProps }, ref) => { // Renamed props to incomingProps for clarity in filtering
+
+  // Explicitly create a new props object for the ShadCN Button,
+  // ensuring 'asChild' is not carried over.
+  const buttonSpecificProps: Record<string, any> = {};
+  for (const key in incomingProps) {
+    if (key !== 'asChild') { // Filter out 'asChild'
+      buttonSpecificProps[key] = incomingProps[key as keyof typeof incomingProps];
+    }
+  }
+
+  // The Tooltip component logic is not active in this dummy version based on previous comments.
+  // If it were, it would wrap the Button.
   // For now, we ignore the 'tooltip' prop for this dummy version's rendering.
-  
+
   return (
-    <Button ref={ref} variant={isActive ? 'secondary' : 'ghost'} {...restProps}>
+    <Button
+      ref={ref}
+      variant={isActive ? 'secondary' : 'ghost'}
+      {...buttonSpecificProps} // Spread the filtered props
+    >
       {children}
     </Button>
   );
