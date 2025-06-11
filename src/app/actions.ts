@@ -22,7 +22,7 @@ function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['sta
     case 'ON_QUEUE': return 'On Queue';
     case 'MEETING': return 'Meeting';
     case 'OFFLINE': return 'Offline';
-    default: console.warn(`Unknown Genesys system presence: ${genesysSystemPresence}`); return 'Offline';
+    default: console.warn(`[actions.ts] mapGenesysToUserStatus: Unknown Genesys system presence: ${genesysSystemPresence}`); return 'Offline';
   }
 }
 
@@ -39,14 +39,14 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
   const region = process.env.GENESYS_REGION;
 
   if (!clientId || !clientSecret || !region) {
-    console.error('[actions.ts] Genesys Cloud API credentials or region not configured.');
+    console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured in .env.local');
     throw new Error('API credentials or region not configured. Please set GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION in your .env.local file.');
   }
 
   const client = platformClient.ApiClient.instance;
   const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
   if (!regionHost) {
-    console.error(`[actions.ts] Invalid Genesys Cloud region: ${region}.`);
+    console.error(`[actions.ts] getAuthenticatedClient: Invalid Genesys Cloud region specified: ${region}.`);
     throw new Error(`Invalid Genesys Cloud region specified: "${region}".`);
   }
   
@@ -54,9 +54,9 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     client.setEnvironment(regionHost);
     try {
       await client.loginClientCredentialsGrant(clientId, clientSecret);
-      console.log('[actions.ts] Successfully authenticated with Genesys Cloud API.');
+      console.log('[actions.ts] getAuthenticatedClient: Successfully authenticated with Genesys Cloud API.');
     } catch (authError: any) {
-      console.error('[actions.ts] Genesys Cloud authentication failed:', authError.message || authError);
+      console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud authentication failed:', authError.message || authError);
       let errorMessage = 'Genesys Cloud authentication failed.';
       if (authError.message?.includes('invalid_client')) {
         errorMessage = 'Genesys Cloud authentication failed: Invalid client ID or secret, or client not authorized for client_credential grant.';
@@ -81,8 +81,8 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
       expand: ['presence', 'division'],
     });
 
-    if (!userResponse.entities) {
-      console.log('[actions.ts] No users found or an issue with the API response.');
+    if (!userResponse.entities || userResponse.entities.length === 0) {
+      console.log('[actions.ts] getGenesysUsers: No users found or an issue with the API response.');
       return [];
     }
 
@@ -93,10 +93,9 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
       divisionId: user.division?.id || 'N/A',
       divisionName: user.division?.name || 'N/A',
     }));
-    // console.log(`[actions.ts] Fetched and mapped ${mappedUsers.length} users.`);
     return mappedUsers;
   } catch (error: any) {
-    console.error('[actions.ts] Error fetching or processing Genesys Cloud user data (full error object):', error);
+    console.error('[actions.ts] getGenesysUsers: Error fetching or processing Genesys Cloud user data:', error.body || error.message, error);
     let detailedErrorMessage = 'An unknown error occurred while fetching user data.';
      if (error.body && error.body.message) {
         detailedErrorMessage = error.body.message;
@@ -136,7 +135,7 @@ export async function getAllSkills(): Promise<SkillDefinition[]> {
       name: skill.name!,
     })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error('[actions.ts] Error fetching all skills:', error.body || error.message);
+    console.error('[actions.ts] getAllSkills: Error fetching all skills:', error.body || error.message);
     throw new Error(`Failed to fetch skills from Genesys Cloud. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -154,7 +153,7 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error(`[actions.ts] Error fetching skills for user ${userId}:`, error.body || error.message);
+    console.error(`[actions.ts] getUserSkills: Error fetching skills for user ${userId}:`, error.body || error.message);
     throw new Error(`Failed to fetch skills for user ${userId}. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -162,32 +161,6 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
 export async function updateUserSkills(userId: string, skillsToSet: UserRoutingSkillUpdateItem[]): Promise<UserRoutingSkill[]> {
   const apiClient = await getAuthenticatedClient(); 
   const usersApi = new platformClient.UsersApi(apiClient);
-
-  console.log(`[actions.ts] updateUserSkills: Instance of usersApi constructor name: ${usersApi?.constructor?.name}`);
-
-  let instanceKeys: string[] = [];
-  if (usersApi) {
-    for (const key in usersApi) {
-      if (Object.prototype.hasOwnProperty.call(usersApi, key)) {
-        instanceKeys.push(`${key} (type: ${typeof (usersApi as any)[key]})`);
-      }
-    }
-  }
-  console.log(`[actions.ts] updateUserSkills: Enumerable keys on usersApi instance: ${instanceKeys.join(', ') || 'None'}`);
-
-  if (usersApi && Object.getPrototypeOf(usersApi)) {
-    const prototype = Object.getPrototypeOf(usersApi);
-    const prototypeMethods = Object.getOwnPropertyNames(prototype)
-      .filter(name => typeof (prototype as any)[name] === 'function');
-    console.log(`[actions.ts] updateUserSkills: Methods on UsersApi.prototype: ${prototypeMethods.join(', ') || 'None'}`);
-    if (!prototypeMethods.includes('putUserRoutingskills')) {
-      console.warn('[actions.ts] updateUserSkills: putUserRoutingskills NOT FOUND on UsersApi.prototype!');
-    } else {
-      console.log('[actions.ts] updateUserSkills: putUserRoutingskills IS FOUND on UsersApi.prototype.');
-    }
-  } else {
-    console.error('[actions.ts] updateUserSkills: Could not get prototype of usersApi.');
-  }
   
   const apiFormattedSkills = skillsToSet.map(s => ({
     id: s.skillId, 
@@ -196,8 +169,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
   }));
 
   try {
-    console.log(`[actions.ts] updateUserSkills: Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
-    console.log(`[actions.ts] updateUserSkills: typeof usersApi.putUserRoutingskills (before call): ${typeof usersApi.putUserRoutingskills}`);
+    // console.log(`[actions.ts] updateUserSkills: Attempting to update skills for user ${userId} with payload:`, JSON.stringify(apiFormattedSkills, null, 2));
     
     const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
     
@@ -209,7 +181,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error: any) {
-    console.error(`[actions.ts] Error updating skills for user ${userId}:`, error.body || error.message, error);
+    console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, error.body || error.message, error);
     let details = error.message;
     if (error.body && error.body.message) {
         details = error.body.message;
@@ -220,9 +192,6 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         }
     } else if ((error as any).response?.data?.message) { 
         details = (error as any).response.data.message;
-    }
-    if (error.message && String(error.message).toLowerCase().includes("is not a function")) {
-      details = String(error.message); 
     }
     throw new Error(`Failed to update skills for user ${userId}. Details: ${details}`);
   }
@@ -267,7 +236,7 @@ export async function getDataTables(): Promise<DataTable[]> {
       description: dt.description,
     }));
   } catch (error: any) {
-    console.error('[actions.ts] Error fetching DataTables:', error.body || error.message);
+    console.error('[actions.ts] getDataTables: Error fetching DataTables:', error.body || error.message);
     throw new Error(`Failed to fetch DataTables from Genesys Cloud. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -279,14 +248,13 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); 
     
     const properties: Record<string, DataTableColumn> = {};
-    
     let determinedPrimaryKeyField: string | undefined = undefined;
 
     if (dt.schema && typeof dt.schema.key === 'string') {
       const trimmedKey = dt.schema.key.trim();
       if (trimmedKey !== '') {
         determinedPrimaryKeyField = trimmedKey;
-        console.log(`[actions.ts] getDataTableDetails: Determined primary key for ${dataTableId} (name: ${dt.name}): '${determinedPrimaryKeyField}' from API value: '${dt.schema.key}'`);
+        // console.log(`[actions.ts] getDataTableDetails: Determined primary key for ${dataTableId} (name: ${dt.name}): '${determinedPrimaryKeyField}'`); // Debug log removed
       } else {
         console.warn(`[actions.ts] getDataTableDetails: Primary key for DataTable ${dataTableId} (name: ${dt.name}) could not be determined: dt.schema.key is an empty string after trimming. Original API value: '${dt.schema.key}'`);
       }
@@ -326,7 +294,7 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       primaryKeyField: determinedPrimaryKeyField,
     };
   } catch (error: any) {
-    console.error(`[actions.ts] Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
+    console.error(`[actions.ts] getDataTableDetails: Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch DataTable details for ${dataTableId}. Details: ${error.body?.message || error.message}`);
   }
 }
@@ -340,22 +308,31 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
       showbrief: !showEmptyFields 
     });
     return result.entities || []; 
-  } catch (error: any)
-{
-    console.error(`[actions.ts] Error fetching rows for DataTable ${dataTableId}:`, error.body || error.message);
+  } catch (error: any) {
+    console.error(`[actions.ts] getDataTableRows: Error fetching rows for DataTable ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch rows for DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
   }
 }
 
-export async function addDataTableRow(dataTableId: string, rowData: DataTableRow): Promise<DataTableRow> {
+export async function addDataTableRow(dataTableId: string, rowKey: string, rowData: DataTableRow): Promise<DataTableRow> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     try {
-        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData);
+        // Ensure the rowKey (primary key) is part of the rowData payload if the API expects it at the top level
+        // For Genesys Cloud, the key is part of the path, and the body is the rest of the data.
+        // However, some APIs might expect the key in the body as well. The SDK usually handles this.
+        // The `postFlowsDatatableRows` creates a new row with an auto-generated key OR the key specified in the body IF the datatable allows it.
+        // For a PUT-like "add or replace", we'd use `putFlowsDatatableRow` with the key.
+        // Here, we are assuming `rowData` includes the primary key field and its value.
+        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData); // rowData should contain the PK field and its value
         return newRow as DataTableRow; 
     } catch (error: any) {
-        console.error(`[actions.ts] Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
-        throw new Error(`Failed to add row to DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+        console.error(`[actions.ts] addDataTableRow: Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
+        let details = error.body?.message || error.message;
+        if (error.body?.details?.[0]?.errorMessage) {
+            details += ` (${error.body.details[0].errorMessage})`;
+        }
+        throw new Error(`Failed to add row to DataTable ${dataTableId}. Details: ${details}`);
     }
 }
 
@@ -366,8 +343,12 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
         const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, rowData);
         return updatedRow as DataTableRow;
     } catch (error: any) {
-        console.error(`[actions.ts] Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message);
-        throw new Error(`Failed to update row ${rowId} in DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+        console.error(`[actions.ts] updateDataTableRow: Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message);
+        let details = error.body?.message || error.message;
+        if (error.body?.details?.[0]?.errorMessage) {
+            details += ` (${error.body.details[0].errorMessage})`;
+        }
+        throw new Error(`Failed to update row ${rowId} in DataTable ${dataTableId}. Details: ${details}`);
     }
 }
 
@@ -377,15 +358,134 @@ export async function deleteDataTableRow(dataTableId: string, rowId: string): Pr
     try {
         await architectApi.deleteFlowsDatatableRow(dataTableId, rowId);
     } catch (error: any) {
-        console.error(`[actions.ts] Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
+        console.error(`[actions.ts] deleteDataTableRow: Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
         throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
     }
 }
-    
-
-    
 
 
+// --- Queue Observation Types and Actions ---
+export interface QueueObservationData {
+  id: string;
+  name: string;
+  divisionId: string;
+  divisionName: string;
+  onQueueUserCount: number;
+  interactingCount: number;
+  waitingCount: number;
+}
 
+export async function getQueueObservations(): Promise<QueueObservationData[]> {
+  await getAuthenticatedClient();
+  const routingApi = new platformClient.RoutingApi();
+  const analyticsApi = new platformClient.AnalyticsApi();
 
+  let activeQueues: { id: string; name: string; divisionId: string; divisionName: string }[] = [];
 
+  try {
+    const queueResponse = await routingApi.getRoutingQueues({
+      pageSize: 100,
+      pageNumber: 1,
+      state: 'active', // Fetch only active queues
+      expand: ['division'], // Expand to get division info
+    });
+
+    if (!queueResponse.entities || queueResponse.entities.length === 0) {
+      console.log('[actions.ts] getQueueObservations: No queues found with state "active". This could be due to no queues being configured as active, insufficient permissions to list them, or no queues matching other implicit criteria.');
+      return [];
+    }
+
+    activeQueues = queueResponse.entities.map(q => ({
+      id: q.id!,
+      name: q.name!,
+      divisionId: q.division?.id || 'N/A',
+      divisionName: q.division?.name || 'N/A',
+    }));
+    console.log(`[actions.ts] getQueueObservations: Found ${activeQueues.length} active queues.`);
+
+  } catch (error: any) {
+    console.error('[actions.ts] getQueueObservations: Error fetching active queues:', error.body || error.message, error);
+    let detailedErrorMessage = 'An unknown error occurred while fetching active queues.';
+    if (error.body && error.body.message) {
+      detailedErrorMessage = error.body.message;
+      if (error.body.contextId) detailedErrorMessage += ` (Trace ID: ${error.body.contextId})`;
+    } else if (error.message) {
+      detailedErrorMessage = error.message;
+    }
+    throw new Error(`Failed to retrieve active queues from Genesys Cloud. Details: ${detailedErrorMessage}.`);
+  }
+
+  // Initialize with default values
+  const activeQueuesWithDefaults: QueueObservationData[] = activeQueues.map(q => ({
+    ...q,
+    onQueueUserCount: 0,
+    interactingCount: 0,
+    waitingCount: 0,
+  }));
+
+  if (activeQueues.length === 0) {
+    // This case is already handled by the check after fetching queues,
+    // but included for completeness if the logic were to change.
+    return [];
+  }
+
+  const observationQuery = {
+    filter: {
+      type: 'AND' as const,
+      clauses: [
+        {
+          type: 'OR' as const,
+          predicates: activeQueues.map(q => ({
+            type: 'dimension' as const,
+            dimension: 'queueId' as const,
+            operator: 'matches' as const,
+            value: q.id,
+          })),
+        },
+      ],
+    },
+    metrics: ['oOnQueueUsers', 'oInteracting', 'oWaiting'] as platformClient.ગેમૉડ્યૂલ.त्मुख्य.QueueObservationMetric[],
+  };
+
+  try {
+    const observationResults = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery);
+    let mappedCount = 0;
+
+    if (observationResults.results && observationResults.results.length > 0) {
+      observationResults.results.forEach(result => {
+        const queueId = result.group?.queueId;
+        if (queueId) {
+          const queueIndex = activeQueuesWithDefaults.findIndex(q => q.id === queueId);
+          if (queueIndex !== -1) {
+            mappedCount++;
+            result.data?.forEach(metricData => {
+              const metricName = metricData.metric as (typeof observationQuery.metrics)[number];
+              const value = metricData.stats?.count ?? 0;
+
+              switch (metricName) {
+                case 'oOnQueueUsers':
+                  activeQueuesWithDefaults[queueIndex].onQueueUserCount = value;
+                  break;
+                case 'oInteracting':
+                  activeQueuesWithDefaults[queueIndex].interactingCount = value;
+                  break;
+                case 'oWaiting':
+                  activeQueuesWithDefaults[queueIndex].waitingCount = value;
+                  break;
+              }
+            });
+          }
+        }
+      });
+      console.log(`[actions.ts] getQueueObservations: Successfully mapped observation data for ${mappedCount} of ${activeQueues.length} active queues.`);
+    } else {
+      console.log(`[actions.ts] getQueueObservations: Analytics query returned no observation data for the ${activeQueues.length} active queues. They will be shown with default (0) values.`);
+    }
+    return activeQueuesWithDefaults;
+
+  } catch (metricsError: any) {
+    console.warn(`[actions.ts] getQueueObservations: Error fetching queue observation metrics. Queues will be shown with default (0) values. Details:`, metricsError.body?.message || metricsError.message);
+    // Proceed to return activeQueuesWithDefaults, which will have 0 for metrics
+    return activeQueuesWithDefaults;
+  }
+}
