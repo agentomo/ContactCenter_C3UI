@@ -132,10 +132,10 @@ export default function DataTablesPage() {
 
   const handleEdit = (row: DataTableRow) => {
     if (!dataTableDetails?.primaryKeyField) {
-      toast({ title: "Error", description: "Primary key field not defined for this table.", variant: "destructive" });
+      toast({ title: "Error", description: "Primary key field not defined for this table. Editing is disabled.", variant: "destructive" });
       return;
     }
-    const pkValue = String(row[dataTableDetails.primaryKeyField]); // Ensure pkValue is a string
+    const pkValue = String(row[dataTableDetails.primaryKeyField]); 
     setEditingRowId(pkValue); 
     setEditedRowData({ ...row }); 
     setIsEditDialogOpen(true);
@@ -161,13 +161,12 @@ export default function DataTablesPage() {
 
   const handleSaveEdit = () => {
     if (!targetTableId || !editingRowId || !editedRowData || !dataTableDetails?.primaryKeyField) {
-      toast({ title: "Error", description: "Cannot save, missing critical data.", variant: "destructive" });
+      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., primary key).", variant: "destructive" });
       return;
     }
     
-    const rowDataPayload = { ...editedRowData };
+    const rowDataPayload: Partial<DataTableRow> = { ...editedRowData };
 
-    // Convert NaN values to null, as NaN is not valid JSON and APIs usually reject it.
     for (const key in rowDataPayload) {
       if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
         if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
@@ -176,18 +175,15 @@ export default function DataTablesPage() {
       }
     }
     
-    // Ensure the primary key in the payload matches the original rowId being edited.
-    // This is crucial because the PK field itself isn't directly edited in the form.
-    // This must be done *after* NaN conversion in case the PK was numeric and somehow became NaN (highly unlikely here).
     rowDataPayload[dataTableDetails.primaryKeyField] = editingRowId;
 
 
     startSubmitting(async () => {
       try {
-        await updateDataTableRow(targetTableId, editingRowId, rowDataPayload);
+        await updateDataTableRow(targetTableId, editingRowId, rowDataPayload as DataTableRow);
         toast({ title: "Row Updated", description: "Successfully updated the row." });
-        fetchDataForTable(targetTableId); // Refresh data
-        handleCancelEdit(); // Close dialog and reset state
+        fetchDataForTable(targetTableId); 
+        handleCancelEdit(); 
       } catch (error: any)
       {
         toast({
@@ -260,9 +256,11 @@ export default function DataTablesPage() {
                  {dataTableDetails?.primaryKeyField && (
                     <p className="text-xs text-muted-foreground mt-1">Primary Key: <strong>{dataTableDetails.primaryKeyField}</strong></p>
                   )}
+                {!dataTableDetails?.primaryKeyField && !isLoadingDetails && dataTableDetails && (
+                  <p className="text-xs text-destructive mt-1 font-semibold">Warning: Primary key not identified. Editing will be disabled.</p>
+                )}
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                {/* <Button variant="outline" size="sm" disabled={isLoading || isSubmitting}> <PlusCircle className="mr-2 h-4 w-4" /> Add Row </Button> */}
                 <Button onClick={handleRefresh} disabled={isLoadingRows || isLoadingDetails || isSubmitting || isEditDialogOpen} variant="default" size="sm">
                   <RefreshCw className={`mr-2 h-4 w-4 ${(isLoadingRows || isLoadingDetails) ? 'animate-spin' : ''}`} />
                   {(isLoadingRows || isLoadingDetails) ? 'Refreshing...' : 'Refresh Data'}
@@ -320,10 +318,16 @@ export default function DataTablesPage() {
                                 </TableCell>
                               ))}
                               <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isSubmitting || isEditDialogOpen} onClick={() => handleEdit(row)} title="Edit">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8" 
+                                  disabled={isSubmitting || isEditDialogOpen || !dataTableDetails?.primaryKeyField} 
+                                  onClick={() => handleEdit(row)} 
+                                  title={!dataTableDetails?.primaryKeyField ? "Edit disabled: No primary key defined" : "Edit row"}
+                                >
                                   <Edit3 className="h-4 w-4" />
                                 </Button>
-                                {/* Delete button placeholder */}
                               </TableCell>
                             </TableRow>
                           );
@@ -336,7 +340,6 @@ export default function DataTablesPage() {
             </CardContent>
           </Card>
 
-          {/* Edit Dialog */}
           <Dialog open={isEditDialogOpen} onOpenChange={handleDialogOpeChange}>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
@@ -348,8 +351,8 @@ export default function DataTablesPage() {
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                 {editedRowData && dataTableDetails && dataTableDetails.schema.properties &&
                   Object.entries(dataTableDetails.schema.properties)
-                    .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) // Exclude primary key from editing
-                    .sort(([aName], [bName]) => aName.localeCompare(bName)) // Sort for consistent order
+                    .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) 
+                    .sort(([aName], [bName]) => aName.localeCompare(bName)) 
                     .map(([colName, colSchema]) => (
                       <div className="grid grid-cols-4 items-center gap-4" key={colName}>
                         <Label htmlFor={colName} className="text-right col-span-1">
@@ -415,5 +418,3 @@ export default function DataTablesPage() {
     </div>
   );
 }
-
-    
