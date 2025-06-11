@@ -4,7 +4,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Genesys Tools', // Updated title
+  title: 'CapitalGroup Genesys Configurator', // Updated title
   description: 'View user statuses and manage skills in Genesys Cloud.', // Updated description
 };
 

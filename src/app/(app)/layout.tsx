@@ -37,7 +37,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <Link href="/" className="flex items-center gap-2" onClick={() => setIsSheetOpen(false)}>
             <Users className="h-7 w-7 text-primary" />
             <h2 className="text-lg font-semibold">
-              Genesys Tools
+              CapitalGroup Genesys Configurator
             </h2>
           </Link>
 
@@ -51,7 +51,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <SheetContent side="left" className="w-[300px] sm:w-[340px]">
               <SheetHeader className="mb-4">
                 <SheetTitle className="flex items-center gap-2">
-                   <Users className="h-6 w-6 text-primary" /> Genesys Tools
+                   <Users className="h-6 w-6 text-primary" /> CapitalGroup Genesys Configurator
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-2">
