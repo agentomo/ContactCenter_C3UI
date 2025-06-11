@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -542,49 +543,64 @@ const SidebarMenuButton = React.forwardRef<
   } & VariantProps<typeof sidebarMenuButtonVariants>
 >(
   (
-    {
-      asChild = false,
+    componentProps,
+    ref
+  ) => {
+    const {
+      asChild: ownAsChildProp, // Renamed to avoid conflict
       isActive = false,
       variant = "default",
       size = "default",
-      tooltip,
+      tooltip: initialTooltip, // Use a different name for the initial prop
       className,
-      ...props
-    },
-    ref
-  ) => {
-    const Comp = asChild ? Slot : "button"
+      ...restFromComponentProps
+    } = componentProps;
+
     const { isMobile, state } = useSidebar()
 
-    const button = (
-      <Comp
+    const { asChild: asChildFromParent, ...elementSpecificProps } = restFromComponentProps;
+    const actualAsChild = ownAsChildProp ?? asChildFromParent ?? false;
+
+    const buttonElement = actualAsChild ? (
+      <Slot
         ref={ref}
         data-sidebar="menu-button"
         data-size={size}
         data-active={isActive}
-        className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-        {...props}
+        className={cn(sidebarMenuButtonVariants({ variant, size, className }))}
+        {...elementSpecificProps}
       />
-    )
+    ) : (
+      <button
+        ref={ref}
+        data-sidebar="menu-button"
+        data-size={size}
+        data-active={isActive}
+        className={cn(sidebarMenuButtonVariants({ variant, size, className }))}
+        {...elementSpecificProps}
+      />
+    );
 
-    if (!tooltip) {
-      return button
+    // Use 'let' for tooltipContentProps to make it mutable
+    let tooltipContentProps = initialTooltip;
+
+    if (!tooltipContentProps) {
+      return buttonElement
     }
 
-    if (typeof tooltip === "string") {
-      tooltip = {
-        children: tooltip,
-      }
+    if (typeof tooltipContentProps === "string") {
+      // Assign to the mutable variable
+      tooltipContentProps = { children: tooltipContentProps }
     }
 
     return (
       <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipTrigger asChild>{buttonElement}</TooltipTrigger>
         <TooltipContent
           side="right"
           align="center"
           hidden={state !== "collapsed" || isMobile}
-          {...tooltip}
+          {...tooltipContentProps} // Use the mutable variable here
         />
       </Tooltip>
     )
