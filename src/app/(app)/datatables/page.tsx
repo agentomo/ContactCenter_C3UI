@@ -135,9 +135,9 @@ export default function DataTablesPage() {
       toast({ title: "Error", description: "Primary key field not defined for this table.", variant: "destructive" });
       return;
     }
-    const pkValue = row[dataTableDetails.primaryKeyField] as string;
-    setEditingRowId(pkValue); // This is the ID for the API call
-    setEditedRowData({ ...row }); // This is the data for the form
+    const pkValue = String(row[dataTableDetails.primaryKeyField]); // Ensure pkValue is a string
+    setEditingRowId(pkValue); 
+    setEditedRowData({ ...row }); 
     setIsEditDialogOpen(true);
   };
 
@@ -166,9 +166,21 @@ export default function DataTablesPage() {
     }
     
     const rowDataPayload = { ...editedRowData };
-    // Ensure the primary key in the payload matches the original rowId being edited
-    // This is crucial because the PK field itself isn't directly edited in the form
+
+    // Convert NaN values to null, as NaN is not valid JSON and APIs usually reject it.
+    for (const key in rowDataPayload) {
+      if (Object.prototype.hasOwnProperty.call(rowDataPayload, key)) {
+        if (typeof rowDataPayload[key] === 'number' && Number.isNaN(rowDataPayload[key])) {
+          rowDataPayload[key] = null;
+        }
+      }
+    }
+    
+    // Ensure the primary key in the payload matches the original rowId being edited.
+    // This is crucial because the PK field itself isn't directly edited in the form.
+    // This must be done *after* NaN conversion in case the PK was numeric and somehow became NaN (highly unlikely here).
     rowDataPayload[dataTableDetails.primaryKeyField] = editingRowId;
+
 
     startSubmitting(async () => {
       try {
@@ -176,7 +188,8 @@ export default function DataTablesPage() {
         toast({ title: "Row Updated", description: "Successfully updated the row." });
         fetchDataForTable(targetTableId); // Refresh data
         handleCancelEdit(); // Close dialog and reset state
-      } catch (error: any) {
+      } catch (error: any)
+      {
         toast({
           title: "Error Updating Row",
           description: error.message || "Could not update the row.",
@@ -297,7 +310,7 @@ export default function DataTablesPage() {
                         </TableRow>
                       ) : (
                         dataTableRows.map((row, rowIndex) => {
-                          const currentPkValue = dataTableDetails?.primaryKeyField ? row[dataTableDetails.primaryKeyField] as string : `row-${rowIndex}`;
+                          const currentPkValue = dataTableDetails?.primaryKeyField ? String(row[dataTableDetails.primaryKeyField]) : `row-${rowIndex}`;
                           return (
                             <TableRow key={currentPkValue}>
                               {orderedColumnNames.map(colName => (
@@ -355,7 +368,7 @@ export default function DataTablesPage() {
                             <Input
                               id={colName}
                               type="number"
-                              value={editedRowData?.[colName] ?? ''}
+                              value={editedRowData?.[colName] === null || editedRowData?.[colName] === undefined ? '' : String(editedRowData?.[colName])}
                               onChange={(e) => handleInputChange(colName, e.target.value === '' ? null : Number(e.target.value))}
                               className="h-9"
                               disabled={isSubmitting}
@@ -378,7 +391,7 @@ export default function DataTablesPage() {
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right col-span-1 font-semibold">{dataTableDetails.primaryKeyField} (Key)</Label>
                         <div className="col-span-3 text-sm text-muted-foreground">
-                            {editedRowData[dataTableDetails.primaryKeyField]}
+                            {String(editedRowData[dataTableDetails.primaryKeyField])}
                         </div>
                     </div>
                  )}
@@ -403,3 +416,4 @@ export default function DataTablesPage() {
   );
 }
 
+    
