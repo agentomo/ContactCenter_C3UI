@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function QueuesPage() {
   const [queueData, setQueueData] = useState<QueueObservationData[]>([]);
   const [isPending, startTransition] = useTransition();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast(); // Correctly destructure dismiss
 
   const fetchQueueData = () => {
     startTransition(async () => {
@@ -26,12 +26,13 @@ export default function QueuesPage() {
           duration: Infinity, // Keep open until dismissed
         });
         toastId = loadingToast.id;
+        console.log("[QueuesPage] Fetching queue data...");
 
         const data = await getQueueObservations();
         console.log("[QueuesPage] Data received from getQueueObservations:", JSON.stringify(data, null, 2));
 
         // Dismiss loading toast
-        if (toastId) toast.dismiss(toastId);
+        if (toastId) dismiss(toastId); // Use the destructured dismiss function
 
         if (data.length === 0) {
           console.warn("[QueuesPage] getQueueObservations returned an empty array. Displaying 'No Queue Data'.");
@@ -51,7 +52,7 @@ export default function QueuesPage() {
         setQueueData(data);
       } catch (error: any) {
         console.error('[QueuesPage] Failed to fetch queue data:', error);
-        if (toastId) toast.dismiss(toastId); // Dismiss loading toast on error
+        if (toastId) dismiss(toastId); // Use the destructured dismiss function
         toast({
           title: "Queue Data Fetch Error",
           description: error.message || "Could not fetch queue data from Genesys Cloud. Please try again or check server logs.",
@@ -160,3 +161,4 @@ export default function QueuesPage() {
     </div>
   );
 }
+
