@@ -199,17 +199,20 @@ export default function DataTablesPage() {
         if (Object.prototype.hasOwnProperty.call(schemaProperties, key)) {
             let value = editedRowData[key];
 
-            if (value === undefined) { // Ensure all schema keys are present
+            if (value === undefined) { 
                 payloadForUpdate[key] = null;
             } else if (typeof value === 'number' && Number.isNaN(value)) {
-                payloadForUpdate[key] = null; // Convert NaN numbers to null
-            } else {
+                payloadForUpdate[key] = null; 
+            } else if (typeof value === 'boolean') {
+                payloadForUpdate[key] = String(value); // Convert boolean to "true" or "false"
+            }
+            else {
                 payloadForUpdate[key] = value;
             }
         }
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (PK INCLUDED in body, ALL SCHEMA FIELDS PRESENT):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS PRESENT, PK INCLUDED, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -235,17 +238,12 @@ export default function DataTablesPage() {
     const initialData: DataTableRow = {};
     Object.keys(dataTableDetails.schema.properties).forEach(colName => {
       const colSchema = getColumnSchema(colName);
-      // Ensure default value is set based on type
       if (colSchema?.type === 'boolean') {
-        initialData[colName] = false;
+        initialData[colName] = false; // Initialize actual booleans as false
       } else if (colSchema?.type === 'string') {
-         // For strings that might represent booleans, check if it's "true" or "false" like in other parts
-        const lowerDefault = String(initialData[colName]).toLowerCase(); // initialData[colName] will be undefined here
-        if (lowerDefault === 'true' || lowerDefault === 'false') { // This condition likely won't be met unless a default is set elsewhere
-            initialData[colName] = false; // Default string "booleans" to false
-        } else {
-            initialData[colName] = ''; // Default other strings to empty
-        }
+        // For strings that might represent booleans, initialize as empty string or based on actual use case
+        // If they are meant to be 'true'/'false' strings, initialize as 'false' string or empty
+        initialData[colName] = ''; 
       } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
         initialData[colName] = null; 
       } else {
@@ -291,13 +289,16 @@ export default function DataTablesPage() {
                 rowDataPayload[key] = null;
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 rowDataPayload[key] = null;
-            } else {
+            } else if (typeof value === 'boolean') {
+                rowDataPayload[key] = String(value); // Convert boolean to "true" or "false"
+            }
+            else {
                 rowDataPayload[key] = value;
             }
         }
     }
     
-    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT):", JSON.stringify(rowDataPayload, null, 2));
+    console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT, Booleans as STRINGS):", JSON.stringify(rowDataPayload, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -541,6 +542,7 @@ export default function DataTablesPage() {
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
                       } else if (colSchema.type === 'string') {
+                        // Check current value (which might be an actual boolean from previous edits, or string from API)
                         const lowerCurrentValue = String(currentValue).toLowerCase();
                         if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
                           treatAsBooleanInput = true;
@@ -556,8 +558,8 @@ export default function DataTablesPage() {
                             {treatAsBooleanInput ? (
                               <Checkbox
                                 id={`edit-${colName}`}
-                                checked={String(currentValue).toLowerCase() === 'true'}
-                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')}
+                                checked={String(currentValue).toLowerCase() === 'true'} // Always compare as string
+                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')} // Store as actual boolean
                                 disabled={isSubmitting}
                                 aria-label={`Edit ${colName}`}
                               />
@@ -620,10 +622,13 @@ export default function DataTablesPage() {
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
                       } else if (colSchema.type === 'string') {
-                        const lowerCurrentValue = String(currentValue).toLowerCase();
-                        if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
-                            treatAsBooleanInput = true;
-                        }
+                        // For string types that we might want to treat as boolean inputs initially
+                        // Example: if you want a new string field that represents a boolean to start with a checkbox
+                        // This part depends on how you want to initialize them. For now, just check schema type for consistency.
+                        // const lowerCurrentValue = String(currentValue).toLowerCase();
+                        // if (lowerCurrentValue === 'true' || lowerCurrentValue === 'false') {
+                        //     treatAsBooleanInput = true;
+                        // }
                       }
                       
                       return (
@@ -632,10 +637,10 @@ export default function DataTablesPage() {
                             {colName} {isPrimaryKey ? '(Key)' : ''} ({colSchema.type})
                           </Label>
                           <div className="col-span-3">
-                            {treatAsBooleanInput ? (
+                            {treatAsBooleanInput ? ( // Based on schema type 'boolean' for new rows
                               <Checkbox
                                 id={`create-${colName}`}
-                                checked={String(currentValue).toLowerCase() === 'true'}
+                                checked={!!currentValue} // currentValue is already initialized to boolean `false` for schema type 'boolean'
                                 onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'create')}
                                 disabled={isSubmitting}
                                 aria-label={`Create ${colName}`}
