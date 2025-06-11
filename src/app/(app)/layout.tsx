@@ -24,7 +24,7 @@ interface AppLayoutProps {
 const navItems = [
   { href: '/', label: 'Status Board', icon: LayoutDashboard },
   { href: '/skills', label: 'Skills Management', icon: ListTodo },
-  { href: '/datatables', label: 'DataTables', icon: Database }, // Added DataTables
+  { href: '/datatables', label: 'DataTables', icon: Database },
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -64,7 +64,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false} 
+                        asChild={false}
                       >
                         <a>
                           <item.icon className="h-5 w-5" />
