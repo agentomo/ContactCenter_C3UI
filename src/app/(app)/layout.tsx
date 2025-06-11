@@ -64,9 +64,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false}
+                        asChild={false} // Ensure Button renders as a button, not a Slot here
                       >
-                        <a>
+                        <a> {/* Inner <a> for legacyBehavior + passHref */}
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
                         </a>
@@ -82,7 +82,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <nav className="hidden md:flex items-center gap-2">
             {navItems.map((item) => (
               <Link key={item.href} href={item.href} asChild>
-                <SidebarMenuButton
+                <SidebarMenuButton 
                   isActive={pathname === item.href}
                   tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
                 >
@@ -107,26 +107,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
->(({ children, isActive, tooltip, ...incomingProps }, ref) => { // Renamed props to incomingProps for clarity in filtering
+>(({ children, isActive, tooltip, ...allOtherPropsFromParent }, ref) => {
 
-  // Explicitly create a new props object for the ShadCN Button,
-  // ensuring 'asChild' is not carried over.
-  const buttonSpecificProps: Record<string, any> = {};
-  for (const key in incomingProps) {
-    if (key !== 'asChild') { // Filter out 'asChild'
-      buttonSpecificProps[key] = incomingProps[key as keyof typeof incomingProps];
-    }
-  }
+  // allOtherPropsFromParent includes href, onClick, and asChild (from Link).
+  // Destructure 'asChild' out, so it's not passed to the ShadCN Button.
+  const { asChild: _asChildFromLink, ...propsToPassToShadCNButton } = allOtherPropsFromParent;
+  // Now, propsToPassToShadCNButton contains props like href, onClick, but NOT _asChildFromLink.
 
-  // The Tooltip component logic is not active in this dummy version based on previous comments.
-  // If it were, it would wrap the Button.
-  // For now, we ignore the 'tooltip' prop for this dummy version's rendering.
+  // The 'tooltip' prop is destructured but not actively used by this simplified local component.
+  // It's kept for signature consistency with other potential SidebarMenuButton versions.
+  // Actual tooltip rendering would require TooltipProvider, Tooltip, TooltipTrigger, TooltipContent.
 
   return (
     <Button
       ref={ref}
       variant={isActive ? 'secondary' : 'ghost'}
-      {...buttonSpecificProps} // Spread the filtered props
+      {...propsToPassToShadCNButton} // Spread props that explicitly exclude 'asChild'
     >
       {children}
     </Button>
