@@ -191,16 +191,21 @@ export default function DataTablesPage() {
   };
 
   const handleSaveEdit = () => {
-    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties) {
-      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, or schema).", variant: "destructive" });
+    if (!selectedTableId || !editingRowId || !editedRowData || !dataTableDetails?.schema?.properties || !dataTableDetails.primaryKeyField) {
+      toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, schema, or PK field name).", variant: "destructive" });
       return;
     }
     
     const payloadForUpdate: DataTableRow = {};
     const schemaProperties = dataTableDetails.schema.properties;
+    const pkField = dataTableDetails.primaryKeyField;
 
     for (const keyInSchema in schemaProperties) {
         if (Object.prototype.hasOwnProperty.call(schemaProperties, keyInSchema)) {
+            if (keyInSchema === pkField) { // Exclude the primary key field from the PUT request body
+                continue;
+            }
+            
             let value = editedRowData[keyInSchema];
 
             if (value === undefined) { 
@@ -216,7 +221,7 @@ export default function DataTablesPage() {
         }
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS INCLUDED, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (PK EXCLUDED from body, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
@@ -689,6 +694,8 @@ export default function DataTablesPage() {
     </div>
   );
 }
+    
+
     
 
     
