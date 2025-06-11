@@ -198,14 +198,12 @@ export default function DataTablesPage() {
     
     const payloadForUpdate: DataTableRow = {};
     const schemaProperties = dataTableDetails.schema.properties;
-    const pkField = dataTableDetails.primaryKeyField;
+    // const pkField = dataTableDetails.primaryKeyField; // Not used for exclusion
 
+    // Iterate over all schema properties to build the payload, including the PK
     for (const keyInSchema in schemaProperties) {
         if (Object.prototype.hasOwnProperty.call(schemaProperties, keyInSchema)) {
-            if (keyInSchema === pkField) { // Exclude the primary key field from the PUT request body
-                continue;
-            }
-            
+            // DO NOT exclude the primary key field
             let value = editedRowData[keyInSchema];
 
             if (value === undefined) { 
@@ -213,7 +211,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 payloadForUpdate[keyInSchema] = null; 
             } else if (typeof value === 'boolean') {
-                payloadForUpdate[keyInSchema] = String(value); // Send booleans as strings "true" or "false"
+                payloadForUpdate[keyInSchema] = String(value); // Send booleans as strings
             }
             else {
                 payloadForUpdate[keyInSchema] = value;
@@ -221,11 +219,11 @@ export default function DataTablesPage() {
         }
     }
     
-    console.log("[DataTablesPage] Payload for updateDataTableRow (PK EXCLUDED from body, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
+    console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS INCLUDED, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
-        await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate);
+        await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate); // editingRowId is the PK value for the URL
         toast({ title: "Row Updated", description: "Successfully updated the row." });
         fetchDataForTable(selectedTableId); 
         handleCancelEdit(); 
@@ -297,7 +295,7 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 rowDataPayload[key] = null;
             } else if (typeof value === 'boolean') {
-                rowDataPayload[key] = String(value); // Send booleans as strings "true" or "false"
+                rowDataPayload[key] = String(value); // Send booleans as strings
             }
             else {
                 rowDataPayload[key] = value;
@@ -694,6 +692,8 @@ export default function DataTablesPage() {
     </div>
   );
 }
+    
+
     
 
     
