@@ -13,15 +13,15 @@ import {
 } from '@/components/ui/table';
 import { StatusIndicator, STATUS_ORDER } from './status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react'; // Minus for unsorted or as a placeholder
+import { Badge } from '@/components/ui/badge';
+import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 
 interface GenesysUserTableProps {
   users: UserStatus[];
   isLoading: boolean;
 }
 
-type SortableColumn = 'name' | 'divisionName' | 'status';
+type SortableColumn = 'name' | 'divisionName' | 'status' | 'extension';
 type SortDirection = 'asc' | 'desc';
 
 interface SortConfig {
@@ -42,10 +42,15 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         if (sortConfig.key === 'status') {
           aValue = STATUS_ORDER.indexOf(a.status);
           bValue = STATUS_ORDER.indexOf(b.status);
-        } else {
-          aValue = a[sortConfig.key].toLowerCase();
-          bValue = b[sortConfig.key].toLowerCase();
+        } else if (sortConfig.key === 'extension') {
+            aValue = a.extension?.toLowerCase() || '';
+            bValue = b.extension?.toLowerCase() || '';
         }
+         else {
+          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'id' | 'divisionId'>] as string)?.toLowerCase() || '';
+          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'id' | 'divisionId'>] as string)?.toLowerCase() || '';
+        }
+
 
         if (aValue < bValue) {
           return sortConfig.direction === 'asc' ? -1 : 1;
@@ -53,6 +58,9 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         if (aValue > bValue) {
           return sortConfig.direction === 'asc' ? 1 : -1;
         }
+        // Secondary sort by name if primary sort values are equal
+        if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
+        if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
         return 0;
       });
     }
@@ -69,7 +77,7 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
 
   const getSortIcon = (columnKey: SortableColumn) => {
     if (!sortConfig || sortConfig.key !== columnKey) {
-      return <Minus className="h-4 w-4 ml-1 opacity-40" />; // Or some other neutral icon
+      return <Minus className="h-4 w-4 ml-1 opacity-40" />;
     }
     if (sortConfig.direction === 'asc') {
       return <ArrowUp className="h-4 w-4 ml-1" />;
@@ -77,11 +85,19 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     return <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
-  const renderHeader = (label: string, columnKey: SortableColumn) => (
-    <TableHead className="font-headline text-base cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => requestSort(columnKey)}>
+  const renderHeader = (label: string, columnKey?: SortableColumn, fixedWidth?: string) => (
+    <TableHead 
+        className={cn(
+            "font-headline text-base", 
+            columnKey && "cursor-pointer hover:bg-muted/50 transition-colors",
+            fixedWidth && `w-[${fixedWidth}]`
+        )}
+        onClick={columnKey ? () => requestSort(columnKey) : undefined}
+        style={fixedWidth ? { width: fixedWidth } : {}}
+    >
       <div className="flex items-center">
         {label}
-        {getSortIcon(columnKey)}
+        {columnKey && getSortIcon(columnKey)}
       </div>
     </TableHead>
   );
@@ -93,9 +109,11 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[35%] font-headline text-base">Name</TableHead>
-              <TableHead className="w-[35%] font-headline text-base">Division</TableHead>
-              <TableHead className="w-[30%] font-headline text-base">Status</TableHead>
+              {renderHeader('Name', 'name', '25%')}
+              {renderHeader('Division', 'divisionName', '20%')}
+              {renderHeader('Status', 'status', '15%')}
+              {renderHeader('Extension', 'extension', '10%')}
+              {renderHeader('Skills', undefined, '30%')}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -104,6 +122,8 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
                 <TableCell><Skeleton className="h-6 w-3/4 rounded-md" /></TableCell>
                 <TableCell><Skeleton className="h-6 w-3/4 rounded-md" /></TableCell>
                 <TableCell><Skeleton className="h-6 w-1/2 rounded-md" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-1/2 rounded-md" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-full rounded-md" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -122,13 +142,15 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card shadow-md overflow-hidden">
-      <Table>
+    <div className="rounded-lg border bg-card shadow-md overflow-x-auto">
+      <Table className="min-w-full">
         <TableHeader>
           <TableRow>
-            {renderHeader('Name', 'name')}
-            {renderHeader('Division', 'divisionName')}
-            {renderHeader('Status', 'status')}
+            {renderHeader('Name', 'name', '25%')}
+            {renderHeader('Division', 'divisionName', '20%')}
+            {renderHeader('Status', 'status', '15%')}
+            {renderHeader('Extension', 'extension', '10%')}
+            {renderHeader('Skills', undefined, '30%')}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -139,6 +161,20 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
               <TableCell className="py-3">
                 <StatusIndicator status={user.status} />
               </TableCell>
+              <TableCell className="font-body py-3">{user.extension || 'N/A'}</TableCell>
+              <TableCell className="font-body py-3">
+                {user.skills && user.skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {user.skills.map(skill => (
+                      <Badge key={skill.id} variant="secondary" className="text-xs whitespace-nowrap">
+                        {skill.name} (P{skill.proficiency})
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">No skills</span>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -146,3 +182,4 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     </div>
   );
 }
+

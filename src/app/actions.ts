@@ -11,6 +11,11 @@ export interface UserStatus {
   status: 'Available' | 'Busy' | 'Offline' | 'On Queue' | 'Away' | 'Meeting';
   divisionId: string;
   divisionName: string;
+  email?: string; // Added for potential future use, not displayed in table yet
+  department?: string; // Added for potential future use
+  title?: string; // Added for potential future use
+  extension?: string;
+  skills?: UserRoutingSkill[];
 }
 
 function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['status'] {
@@ -31,6 +36,10 @@ interface GenesysUser {
   name: string;
   presence?: { presenceDefinition?: { id: string; systemPresence?: string; }; };
   division?: { id: string; name: string; };
+  email?: string;
+  department?: string;
+  title?: string;
+  primaryContactInfo?: { address: string; mediaType: string; type: string; extension?: string; display?: string }[];
 }
 
 async function getAuthenticatedClient(): Promise<ApiClient> {
@@ -77,7 +86,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     const userResponse = await usersApi.getUsers({
       pageSize: 100, 
       pageNumber: 1,
-      expand: ['presence', 'division'],
+      expand: ['presence', 'division', 'primaryContactInfo'], // Added primaryContactInfo
     });
 
     if (!userResponse.entities || userResponse.entities.length === 0) {
@@ -85,14 +94,58 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
       return [];
     }
 
-    const mappedUsers = (userResponse.entities as GenesysUser[]).map((user) => ({
-      id: user.id,
-      name: user.name || 'Unknown User',
-      status: mapGenesysToUserStatus(user.presence?.presenceDefinition?.systemPresence),
-      divisionId: user.division?.id || 'N/A',
-      divisionName: user.division?.name || 'N/A',
-    }));
-    return mappedUsers;
+    const mappedUsersWithoutSkills = (userResponse.entities as GenesysUser[]).map((user) => {
+      let extension: string | undefined = undefined;
+      if (user.primaryContactInfo) {
+        const primaryPhoneContact = user.primaryContactInfo.find(
+          (contact) => contact.mediaType === 'PHONE' && contact.type === 'PRIMARY' && contact.extension
+        );
+        if (primaryPhoneContact) {
+          extension = primaryPhoneContact.extension;
+        } else {
+          // Fallback to the first phone contact that has an extension
+          const anyPhoneContactWithExt = user.primaryContactInfo.find(
+            (contact) => contact.mediaType === 'PHONE' && contact.extension
+          );
+          if (anyPhoneContactWithExt) {
+            extension = anyPhoneContactWithExt.extension;
+          }
+        }
+      }
+
+      return {
+        id: user.id,
+        name: user.name || 'Unknown User',
+        status: mapGenesysToUserStatus(user.presence?.presenceDefinition?.systemPresence),
+        divisionId: user.division?.id || 'N/A',
+        divisionName: user.division?.name || 'N/A',
+        email: user.email,
+        department: user.department,
+        title: user.title,
+        extension: extension,
+        skills: [], // Initialize skills, will be fetched next
+      };
+    });
+
+    // Fetch skills for each user
+    // WARNING: This makes N+1 API calls (1 for users, N for skills).
+    // For a large number of users, this can be slow and hit API rate limits.
+    // Consider fetching skills on demand (e.g., when a user row is expanded/clicked) for better performance.
+    console.warn('[actions.ts] getGenesysUsers: Fetching skills for each user. This may be slow for many users.');
+    const usersWithDetails = await Promise.all(
+      mappedUsersWithoutSkills.map(async (user) => {
+        try {
+          const skills = await getUserSkills(user.id);
+          return { ...user, skills };
+        } catch (skillError: any) {
+          console.warn(`[actions.ts] getGenesysUsers: Failed to fetch skills for user ${user.id} (${user.name}): ${skillError.message}`);
+          return { ...user, skills: [] }; // Return user with empty skills array on error
+        }
+      })
+    );
+
+    return usersWithDetails;
+
   } catch (error: any) {
     console.error('[actions.ts] getGenesysUsers: Error fetching or processing Genesys Cloud user data:', error.body || error.message);
     let detailedErrorMessage = 'An unknown error occurred while fetching user data.';
@@ -354,7 +407,7 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
     if (rowKey === undefined || rowKey === null || String(rowKey).trim() === '') {
         throw new Error(`Cannot add row: Primary key field "${dtDetails.primaryKeyField}" must have a value.`);
     }
-    const body = { ...rowData };
+    const body = { ...rowData }; // Make a copy
     console.log(`[actions.ts] addDataTableRow: Adding row to table ${dataTableId} with key ${String(rowKey)} and data:`, JSON.stringify(body, null, 2));
     try {
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
@@ -423,7 +476,7 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   const routingApi = new platformClient.RoutingApi(apiClient);
   const analyticsApi = new platformClient.AnalyticsApi(apiClient);
 
-  const apiOptions = { pageSize: 200 }; // Fetch up to 200 queues initially
+  const apiOptions = {}; 
   console.log('[actions.ts] getActiveQueues: API call parameters for routing/queues:', JSON.stringify(apiOptions, null, 2));
 
   let basicQueues: any[] = [];
@@ -464,14 +517,13 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
             operator: "matches",
             value: id,
           }))
-        } as platformClient.Models.QueueObservationQueryFilter, // Type assertion for filter
+        } as platformClient.Models.QueueObservationQueryFilter, 
         metrics: ["oWaiting", "oInteracting", "oAvailableUsers"]
       };
       
-      // Log the exact body being sent for the observation query
       console.log('[actions.ts] getActiveQueues: Analytics observation query body:', JSON.stringify(observationQuery, null, 2));
 
-      const observationResponse = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery as any); // Use 'as any' if type issues persist with SDK body
+      const observationResponse = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery as any); 
 
       if (observationResponse.results) {
         const metricsMap = new Map<string, Partial<QueueBasicData>>();
@@ -499,12 +551,9 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
       }
     } catch (error: any) {
       console.error('[actions.ts] getActiveQueues: Error fetching queue observation data:', error.body || error.message, error);
-      // Don't throw here, just log, so we can still return basic queue data
-      // The UI will show N/A or 0 for metrics if they fail.
     }
   }
   
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
     
-
