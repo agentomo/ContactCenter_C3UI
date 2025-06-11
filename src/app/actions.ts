@@ -33,7 +33,6 @@ interface GenesysUser {
   division?: { id: string; name: string; };
 }
 
-// Helper to manage Genesys Cloud API client authentication
 async function getAuthenticatedClient(): Promise<ApiClient> {
   const clientId = process.env.GENESYS_CLIENT_ID;
   const clientSecret = process.env.GENESYS_CLIENT_SECRET;
@@ -51,7 +50,6 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     throw new Error(`Invalid Genesys Cloud region specified: "${region}".`);
   }
   
-  // Check if already authenticated by looking for the authentication object and access token
   if (!client.authentications['PureCloud OAuth']?.accessToken) {
     client.setEnvironment(regionHost);
     try {
@@ -78,7 +76,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
 
   try {
     const userResponse = await usersApi.getUsers({
-      pageSize: 100, // Consider pagination for more users
+      pageSize: 100, 
       pageNumber: 1,
       expand: ['presence', 'division'],
     });
@@ -111,31 +109,27 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
 }
 
 
-// --- Skills Management Types and Actions ---
-
 export interface SkillDefinition {
   id: string;
   name: string;
 }
 
 export interface UserRoutingSkill {
-  id: string; // This is the skill's ID
+  id: string; 
   name: string;
-  proficiency: number; // Genesys API uses 1-5
+  proficiency: number; 
 }
 
-// For updating skills, the API expects a list of objects with skillId and proficiency
 export interface UserRoutingSkillUpdateItem {
   skillId: string;
   proficiency: number;
-  state?: 'active' | 'inactive' | 'deleted'; // Optional, defaults to 'active' if not provided
+  state?: 'active' | 'inactive' | 'deleted'; 
 }
 
 export async function getAllSkills(): Promise<SkillDefinition[]> {
   await getAuthenticatedClient();
   const routingApi = new platformClient.RoutingApi();
   try {
-    // Consider pagination if there are many skills
     const skillsData = await routingApi.getRoutingSkills({ pageSize: 200, pageNumber: 1 });
     return (skillsData.entities || []).map(skill => ({
       id: skill.id!,
@@ -153,7 +147,7 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
   try {
     const userSkillsData = await usersApi.getUserRoutingskills(userId, { pageSize: 100 });
     return (userSkillsData.entities || [])
-      .filter(skill => skill.id && skill.name && skill.proficiency !== undefined) // Ensure essential fields are present
+      .filter(skill => skill.id && skill.name && skill.proficiency !== undefined) 
       .map(skill => ({
         id: skill.id!, 
         name: skill.name!,
@@ -168,21 +162,14 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
 export async function updateUserSkills(userId: string, skillsToSet: UserRoutingSkillUpdateItem[]): Promise<UserRoutingSkill[]> {
   await getAuthenticatedClient();
   const usersApi = new platformClient.UsersApi();
-
-  // Map to the format expected by the SDK/API for PUT request
-  // The body for PUT should be an array of objects, each defining a skill and its proficiency.
-  // The 'id' in Models.UserRoutingSkill is the skillId.
   const apiFormattedSkills = skillsToSet.map(s => ({
-    id: s.skillId, // This is the skill ID
+    id: s.skillId, 
     proficiency: s.proficiency,
-    state: s.state || 'active', // Default to active if not specified
+    state: s.state || 'active', 
   }));
 
   try {
-    // The SDK's putUserRoutingskills method expects the array of skill objects as the second argument (body).
     const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
-    
-    // The response from PUT is UserSkillEntityListing, map it back
     return (updatedSkillsData.entities || [])
       .filter(skill => skill.id && skill.name && skill.proficiency !== undefined)
       .map(skill => ({
@@ -207,6 +194,154 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
   }
 }
 
-// Remove the old helper function for credentials as it's incorporated into getAuthenticatedClient
-// function getGenesysCredentials() { ... }
-// The usersApi and routingApi are instantiated where needed after client authentication.
+// --- DataTable Management Types and Actions ---
+
+export interface DataTable {
+  id: string;
+  name: string;
+  description?: string;
+  // divisionId?: string; // Division info might require separate handling
+}
+
+export interface DataTableColumn {
+  name: string;
+  type: string; 
+  isPrimaryKey?: boolean;
+}
+
+export interface DataTableSchema {
+  properties: Record<string, DataTableColumn>; 
+  primaryKey?: string[]; // Genesys API might use 'key' for the name of the key property under schema object.
+}
+
+export interface DataTableRow {
+  [key: string]: any; 
+}
+
+export interface DataTableDetails extends DataTable {
+  schema: DataTableSchema;
+  primaryKeyField?: string; // The name of the field that is the primary key
+}
+
+export async function getDataTables(): Promise<DataTable[]> {
+  await getAuthenticatedClient();
+  const architectApi = new platformClient.ArchitectApi();
+  try {
+    const result = await architectApi.getFlowsDatatables({ pageSize: 100 });
+    return (result.entities || []).map(dt => ({
+      id: dt.id!,
+      name: dt.name!,
+      description: dt.description,
+    }));
+  } catch (error: any) {
+    console.error('Error fetching DataTables:', error.body || error.message);
+    throw new Error(`Failed to fetch DataTables from Genesys Cloud. Details: ${error.body?.message || error.message}`);
+  }
+}
+
+export async function getDataTableDetails(dataTableId: string): Promise<DataTableDetails> {
+  await getAuthenticatedClient();
+  const architectApi = new platformClient.ArchitectApi();
+  try {
+    // The expand parameter for schema is usually 'schema.properties' or just 'schema'
+    const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); // 'expand' might not be strictly typed in all SDK versions
+    
+    const properties: Record<string, DataTableColumn> = {};
+    let primaryKeyField: string | undefined = undefined;
+
+    if (dt.schema?.properties) {
+        for (const [key, value] of Object.entries(dt.schema.properties as any)) {
+            // Genesys sometimes nests the actual column type under a 'type' object, or directly as a string.
+            // And sometimes it's '$ref' for complex types. We'll simplify.
+            let columnType = 'string'; // Default to string
+            if (typeof (value as any).type === 'string') {
+                columnType = (value as any).type;
+            } else if (typeof (value as any).type === 'object' && (value as any).type.type === 'string') {
+                 columnType = (value as any).type.type; // Example for a specific structure
+            }
+            // The isPrimaryKey property might not be directly on schema.properties[key].
+            // It's usually that one of the properties is named 'key' or specified in schema.key
+            // Or the column whose name matches `dt.schema.key` is the primary key.
+            const isPK = dt.schema?.key === key;
+            if (isPK) primaryKeyField = key;
+
+            properties[key] = {
+                name: key,
+                type: columnType,
+                isPrimaryKey: isPK,
+            };
+        }
+    }
+     if (!primaryKeyField && dt.schema?.key) { // Fallback if primaryKeyField was not set via iteration
+      primaryKeyField = dt.schema.key;
+      if (properties[primaryKeyField]) {
+        properties[primaryKeyField].isPrimaryKey = true;
+      }
+    }
+
+
+    return {
+      id: dt.id!,
+      name: dt.name!,
+      description: dt.description,
+      schema: { 
+        properties,
+        primaryKey: dt.schema?.key ? [dt.schema.key] : (primaryKeyField ? [primaryKeyField] : []),
+      },
+      primaryKeyField: primaryKeyField,
+    };
+  } catch (error: any) {
+    console.error(`Error fetching DataTable details for ${dataTableId}:`, error.body || error.message);
+    throw new Error(`Failed to fetch DataTable details for ${dataTableId}. Details: ${error.body?.message || error.message}`);
+  }
+}
+
+export async function getDataTableRows(dataTableId: string, showEmptyFields: boolean = true): Promise<DataTableRow[]> {
+  await getAuthenticatedClient();
+  const architectApi = new platformClient.ArchitectApi();
+  try {
+    const result = await architectApi.getFlowsDatatableRows(dataTableId, { 
+      pageSize: 200, 
+      showbrief: !showEmptyFields // showbrief=false returns all fields. true returns only key.
+    });
+    return result.entities || []; 
+  } catch (error: any) {
+    console.error(`Error fetching rows for DataTable ${dataTableId}:`, error.body || error.message);
+    throw new Error(`Failed to fetch rows for DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+  }
+}
+
+export async function addDataTableRow(dataTableId: string, rowData: DataTableRow): Promise<DataTableRow> {
+    await getAuthenticatedClient();
+    const architectApi = new platformClient.ArchitectApi();
+    try {
+        const newRow = await architectApi.postFlowsDatatableRows(dataTableId, rowData);
+        return newRow as DataTableRow; 
+    } catch (error: any) {
+        console.error(`Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
+        throw new Error(`Failed to add row to DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+    }
+}
+
+export async function updateDataTableRow(dataTableId: string, rowId: string, rowData: DataTableRow): Promise<DataTableRow> {
+    await getAuthenticatedClient();
+    const architectApi = new platformClient.ArchitectApi();
+    try {
+        const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, rowData);
+        return updatedRow as DataTableRow;
+    } catch (error: any) {
+        console.error(`Error updating row ${rowId} in DataTable ${dataTableId}:`, error.body || error.message);
+        throw new Error(`Failed to update row ${rowId} in DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+    }
+}
+
+export async function deleteDataTableRow(dataTableId: string, rowId: string): Promise<void> {
+    await getAuthenticatedClient();
+    const architectApi = new platformClient.ArchitectApi();
+    try {
+        await architectApi.deleteFlowsDatatableRow(dataTableId, rowId);
+    } catch (error: any) {
+        console.error(`Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
+        throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+    }
+}

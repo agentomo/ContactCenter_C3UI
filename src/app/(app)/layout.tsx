@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ListTodo, Users, Menu } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Users, Menu, Database } from 'lucide-react'; // Added Database icon
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,7 @@ interface AppLayoutProps {
 const navItems = [
   { href: '/', label: 'Status Board', icon: LayoutDashboard },
   { href: '/skills', label: 'Skills Management', icon: ListTodo },
+  { href: '/datatables', label: 'DataTables', icon: Database }, // Added DataTables
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -43,7 +44,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden"> {/* Show only on md and smaller, adjust as needed */}
+              <Button variant="ghost" size="icon" className="md:hidden">
                 <Menu className="h-6 w-6" />
                 <span className="sr-only">Toggle Menu</span>
               </Button>
@@ -62,9 +63,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false} // Ensure Button doesn't try to use Link's asChild
+                        asChild={false}
                       >
-                        <a> {/* Content needs to be wrapped for passHref with legacyBehavior or direct styling */}
+                        <a> 
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
                         </a>
@@ -76,20 +77,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </SheetContent>
           </Sheet>
           
-          {/* Desktop Navigation (visible on md and larger) */}
           <nav className="hidden md:flex items-center gap-2">
             {navItems.map((item) => (
-              <Link key={item.href} href={item.href} legacyBehavior passHref>
-                <Button
-                  variant={pathname === item.href ? 'secondary' : 'ghost'}
-                  className="gap-2"
-                  asChild={false}
+              <Link key={item.href} href={item.href} asChild>
+                <SidebarMenuButton // Using SidebarMenuButton directly for consistency if needed, or just Button
+                  isActive={pathname === item.href}
+                  tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
                 >
-                  <a>
-                    <item.icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </a>
-                </Button>
+                  <item.icon />
+                  <span>{item.label}</span>
+                </SidebarMenuButton>
               </Link>
             ))}
           </nav>
@@ -102,3 +99,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
     </div>
   );
 }
+// Dummy SidebarMenuButton component to satisfy the type checker if not imported from a real sidebar.
+// In a real scenario, this would be imported or Link would wrap a standard Button.
+const SidebarMenuButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
+>(({ children, isActive, tooltip, ...props }, ref) => {
+  // This is a simplified placeholder.
+  // If using ShadCN Button, ensure it handles props correctly when wrapped by Link asChild.
+  return (
+    <Button ref={ref} variant={isActive ? 'secondary' : 'ghost'} {...props}>
+      {children}
+    </Button>
+  );
+});
+SidebarMenuButton.displayName = "SidebarMenuButton";
