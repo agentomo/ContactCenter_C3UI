@@ -15,6 +15,7 @@ import { StatusIndicator, STATUS_ORDER } from './status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { cn } from '@/lib/utils'; // Added import for cn
 
 interface GenesysUserTableProps {
   users: UserStatus[];
@@ -182,4 +183,3 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     </div>
   );
 }
-
