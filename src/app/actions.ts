@@ -11,9 +11,9 @@ export interface UserStatus {
   status: 'Available' | 'Busy' | 'Offline' | 'On Queue' | 'Away' | 'Meeting';
   divisionId: string;
   divisionName: string;
-  email?: string; // Added for potential future use, not displayed in table yet
-  department?: string; // Added for potential future use
-  title?: string; // Added for potential future use
+  email?: string;
+  department?: string; 
+  title?: string; 
   extension?: string;
   skills?: UserRoutingSkill[];
 }
@@ -48,8 +48,8 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
   const region = process.env.GENESYS_REGION;
 
   if (!clientId || !clientSecret || !region) {
-    console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured in .env.local');
-    throw new Error('API credentials or region not configured. Please set GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION in your .env.local file.');
+    console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured.');
+    throw new Error('Genesys Cloud API credentials or region not configured. Ensure GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION are correctly set as environment variables in your deployment environment.');
   }
 
   const client = platformClient.ApiClient.instance;
@@ -86,7 +86,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     const userResponse = await usersApi.getUsers({
       pageSize: 100, 
       pageNumber: 1,
-      expand: ['presence', 'division', 'primaryContactInfo'], // Added primaryContactInfo
+      expand: ['presence', 'division', 'primaryContactInfo'],
     });
 
     if (!userResponse.entities || userResponse.entities.length === 0) {
@@ -103,7 +103,6 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
         if (primaryPhoneContact) {
           extension = primaryPhoneContact.extension;
         } else {
-          // Fallback to the first phone contact that has an extension
           const anyPhoneContactWithExt = user.primaryContactInfo.find(
             (contact) => contact.mediaType === 'PHONE' && contact.extension
           );
@@ -123,14 +122,10 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
         department: user.department,
         title: user.title,
         extension: extension,
-        skills: [], // Initialize skills, will be fetched next
+        skills: [], 
       };
     });
-
-    // Fetch skills for each user
-    // WARNING: This makes N+1 API calls (1 for users, N for skills).
-    // For a large number of users, this can be slow and hit API rate limits.
-    // Consider fetching skills on demand (e.g., when a user row is expanded/clicked) for better performance.
+    
     console.warn('[actions.ts] getGenesysUsers: Fetching skills for each user. This may be slow for many users.');
     const usersWithDetails = await Promise.all(
       mappedUsersWithoutSkills.map(async (user) => {
@@ -139,7 +134,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
           return { ...user, skills };
         } catch (skillError: any) {
           console.warn(`[actions.ts] getGenesysUsers: Failed to fetch skills for user ${user.id} (${user.name}): ${skillError.message}`);
-          return { ...user, skills: [] }; // Return user with empty skills array on error
+          return { ...user, skills: [] }; 
         }
       })
     );
@@ -407,7 +402,7 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
     if (rowKey === undefined || rowKey === null || String(rowKey).trim() === '') {
         throw new Error(`Cannot add row: Primary key field "${dtDetails.primaryKeyField}" must have a value.`);
     }
-    const body = { ...rowData }; // Make a copy
+    const body = { ...rowData }; 
     console.log(`[actions.ts] addDataTableRow: Adding row to table ${dataTableId} with key ${String(rowKey)} and data:`, JSON.stringify(body, null, 2));
     try {
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
@@ -428,7 +423,7 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
     
-    const bodyForApi = JSON.parse(JSON.stringify(rowData)); // Ensure a clean copy
+    const bodyForApi = JSON.parse(JSON.stringify(rowData)); 
 
     console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
     console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(bodyForApi, null, 2));
@@ -504,7 +499,6 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
     availableMembers: undefined,
   }));
 
-  // Fetch observation data for these queues
   const queueIds = mappedQueues.map(q => q.id);
   if (queueIds.length > 0) {
     try {
@@ -551,9 +545,12 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
       }
     } catch (error: any) {
       console.error('[actions.ts] getActiveQueues: Error fetching queue observation data:', error.body || error.message, error);
+      // We don't re-throw here, so the basic queue list is still returned even if metrics fail.
     }
   }
   
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
+    
+
     
