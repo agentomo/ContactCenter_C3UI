@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ListTodo, Users, Menu, Database, LayoutList } from 'lucide-react'; 
+import { LayoutDashboard, ListTodo, Users, Menu, Database, LayoutList, Network } from 'lucide-react'; 
 
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,7 @@ const navItems = [
   { href: '/skills', label: 'Skills Management', icon: ListTodo },
   { href: '/datatables', label: 'DataTables', icon: Database },
   { href: '/queues', label: 'Queues', icon: LayoutList },
+  { href: '/infrastructure', label: 'Infrastructure', icon: Network },
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {

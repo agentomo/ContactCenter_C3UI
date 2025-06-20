@@ -15,6 +15,7 @@ export interface UserStatus {
   department?: string;
   title?: string;
   extension?: string;
+  // Skills removed from here
 }
 
 function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['status'] {
@@ -48,7 +49,7 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
 
   if (!clientId || !clientSecret || !region) {
     console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured.');
-    throw new Error('Genesys Cloud API credentials or region not configured. Ensure GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION are correctly set as environment variables in your deployment environment.');
+    throw new Error('Genesys Cloud API credentials or region not configured. Ensure GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION are correctly set as environment variables in your deployment environment (e.g., Firebase App Hosting).');
   }
 
   const client = platformClient.ApiClient.instance;
@@ -531,8 +532,86 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
       }
     } catch (error: any) {
       console.error('[actions.ts] getActiveQueues: Error fetching queue observation data:', error.body || error.message, error);
+      // We don't throw here, so the page can still load basic queue info even if metrics fail.
     }
   }
 
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// --- Telephony Infrastructure Health Types and Actions ---
+export type EdgeOperationalStatus = 'Online' | 'Offline' | 'Degraded' | 'Unknown';
+
+export interface EdgeBasic {
+  id: string;
+  name: string;
+  description?: string;
+  status: EdgeOperationalStatus;
+  edgeGroup?: { id: string; name: string };
+  apiVersion?: string;
+  make?: string;
+  model?: string;
+}
+
+function mapEdgeApiStatus(
+  apiState: string | undefined,
+  apiOnlineStatus: string | undefined
+): EdgeOperationalStatus {
+  const state = apiState?.toUpperCase();
+  const onlineStatus = apiOnlineStatus?.toUpperCase();
+
+  if (state === 'ACTIVE') {
+    if (onlineStatus === 'ONLINE') return 'Online';
+    if (onlineStatus === 'DEGRADED') return 'Degraded';
+    if (onlineStatus === 'OFFLINE') return 'Offline';
+  }
+  if (state === 'INACTIVE') return 'Offline';
+  // For 'DELETED' state, they will be filtered out, but if they weren't:
+  // if (state === 'DELETED') return 'Offline'; 
+
+  console.warn(`[actions.ts] mapEdgeApiStatus: Unknown Edge state/onlineStatus combination: state=${apiState}, onlineStatus=${apiOnlineStatus}`);
+  return 'Unknown';
+}
+
+export async function getEdgesBasicInfo(): Promise<EdgeBasic[]> {
+  await getAuthenticatedClient();
+  const telephonyApi = new platformClient.TelephonyProvidersEdgeApi();
+
+  try {
+    const edgesResponse = await telephonyApi.getTelephonyProvidersEdges({
+      pageSize: 100, // Adjust as needed
+      // expand: ['edgeGroup'] // Potential expansion if needed later
+    });
+
+    if (!edgesResponse.entities || edgesResponse.entities.length === 0) {
+      console.warn('[actions.ts] getEdgesBasicInfo: No Edges found or API returned empty list.');
+      return [];
+    }
+    
+    const mappedEdges = edgesResponse.entities
+      .filter(edge => edge.state?.toUpperCase() !== 'DELETED') // Filter out deleted edges
+      .map(edge => ({
+        id: edge.id!,
+        name: edge.name!,
+        description: edge.description,
+        status: mapEdgeApiStatus(edge.state, edge.onlineStatus),
+        edgeGroup: edge.edgeGroup ? { id: edge.edgeGroup.id!, name: edge.edgeGroup.name! } : undefined,
+        apiVersion: edge.apiVersion,
+        make: edge.make,
+        model: edge.model,
+      }));
+
+    return mappedEdges.sort((a,b) => a.name.localeCompare(b.name));
+
+  } catch (error: any) {
+    console.error('[actions.ts] getEdgesBasicInfo: Error fetching Genesys Cloud Edges:', error.body || error.message);
+    let detailedErrorMessage = 'An unknown error occurred while fetching Edge data.';
+     if (error.body && error.body.message) {
+        detailedErrorMessage = error.body.message;
+        if (error.body.contextId) detailedErrorMessage += ` (Trace ID: ${error.body.contextId})`;
+    } else if (error.message) {
+        detailedErrorMessage = error.message;
+    }
+    throw new Error(`Failed to retrieve Edge information from Genesys Cloud. Details: ${detailedErrorMessage}. Check server logs and ensure the OAuth client has 'telephony:providers:edge:view' permission.`);
+  }
 }
