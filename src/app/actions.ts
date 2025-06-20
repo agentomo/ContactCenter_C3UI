@@ -12,10 +12,9 @@ export interface UserStatus {
   divisionId: string;
   divisionName: string;
   email?: string;
-  department?: string; 
-  title?: string; 
+  department?: string;
+  title?: string;
   extension?: string;
-  // skills removed from here
 }
 
 function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['status'] {
@@ -58,7 +57,7 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     console.error(`[actions.ts] getAuthenticatedClient: Invalid Genesys Cloud region specified: ${region}.`);
     throw new Error(`Invalid Genesys Cloud region specified: "${region}".`);
   }
-  
+
   if (!client.authentications['PureCloud OAuth']?.accessToken) {
     client.setEnvironment(regionHost);
     try {
@@ -84,7 +83,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
 
   try {
     const userResponse = await usersApi.getUsers({
-      pageSize: 100, 
+      pageSize: 100,
       pageNumber: 1,
       expand: ['presence', 'division', 'primaryContactInfo'],
     });
@@ -122,11 +121,9 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
         department: user.department,
         title: user.title,
         extension: extension,
-        // skills property removed
       };
     });
-    
-    // Removed skill fetching loop
+
     return mappedUsers;
 
   } catch (error: any) {
@@ -149,15 +146,15 @@ export interface SkillDefinition {
 }
 
 export interface UserRoutingSkill {
-  id: string; 
+  id: string;
   name: string;
-  proficiency: number; 
+  proficiency: number;
 }
 
 export interface UserRoutingSkillUpdateItem {
   skillId: string;
   proficiency: number;
-  state?: 'active' | 'inactive' | 'deleted'; 
+  state?: 'active' | 'inactive' | 'deleted';
 }
 
 export async function getAllSkills(): Promise<SkillDefinition[]> {
@@ -181,9 +178,9 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
   try {
     const userSkillsData = await usersApi.getUserRoutingskills(userId, { pageSize: 100 });
     return (userSkillsData.entities || [])
-      .filter(skill => skill.id && skill.name && skill.proficiency !== undefined) 
+      .filter(skill => skill.id && skill.name && skill.proficiency !== undefined)
       .map(skill => ({
-        id: skill.id!, 
+        id: skill.id!,
         name: skill.name!,
         proficiency: skill.proficiency!,
       })).sort((a, b) => a.name.localeCompare(b.name));
@@ -195,18 +192,18 @@ export async function getUserSkills(userId: string): Promise<UserRoutingSkill[]>
 }
 
 export async function updateUserSkills(userId: string, skillsToSet: UserRoutingSkillUpdateItem[]): Promise<UserRoutingSkill[]> {
-  const apiClient = await getAuthenticatedClient(); 
+  const apiClient = await getAuthenticatedClient();
   const usersApi = new platformClient.UsersApi(apiClient);
-  
+
   const apiFormattedSkills = skillsToSet.map(s => ({
-    id: s.skillId, 
+    id: s.skillId,
     proficiency: s.proficiency,
-    state: s.state || 'active', 
+    state: s.state || 'active',
   }));
 
   try {
     const updatedSkillsData = await usersApi.putUserRoutingskills(userId, apiFormattedSkills);
-    
+
     return (updatedSkillsData.entities || [])
       .filter(skill => skill.id && skill.name && skill.proficiency !== undefined)
       .map(skill => ({
@@ -223,7 +220,7 @@ export async function updateUserSkills(userId: string, skillsToSet: UserRoutingS
         } else if (error.body.contextId) {
             details += ` (Trace ID: ${error.body.contextId})`;
         }
-    } else if ((error as any).response?.data?.message) { 
+    } else if ((error as any).response?.data?.message) {
         details = (error as any).response.data.message;
     }
     console.error(`[actions.ts] updateUserSkills: Error updating skills for user ${userId}:`, details);
@@ -241,24 +238,24 @@ export interface DataTable {
 
 export interface DataTableColumn {
   name: string;
-  type: string; 
+  type: string;
   isPrimaryKey?: boolean;
 }
 
 export interface DataTableSchema {
-  properties: Record<string, DataTableColumn>; 
-  primaryKey?: string[]; 
-  required?: string[]; 
-  key?: string; 
+  properties: Record<string, DataTableColumn>;
+  primaryKey?: string[];
+  required?: string[];
+  key?: string;
 }
 
 export interface DataTableRow {
-  [key: string]: any; 
+  [key: string]: any;
 }
 
 export interface DataTableDetails extends DataTable {
   schema: DataTableSchema;
-  primaryKeyField?: string; 
+  primaryKeyField?: string;
 }
 
 export async function getDataTables(): Promise<DataTable[]> {
@@ -281,11 +278,11 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
   await getAuthenticatedClient();
   const architectApi = new platformClient.ArchitectApi();
   try {
-    const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any); 
-    
+    const dt = await architectApi.getFlowsDatatable(dataTableId, { expand: 'schema' } as any);
+
     const properties: Record<string, DataTableColumn> = {};
     let determinedPrimaryKeyField: string | undefined = undefined;
-    const dtSchema = dt.schema as DataTableSchema | undefined; 
+    const dtSchema = dt.schema as DataTableSchema | undefined;
 
     if (dtSchema) {
       if (Object.prototype.hasOwnProperty.call(dtSchema, 'key') && typeof dtSchema.key === 'string' && dtSchema.key.trim().length > 0) {
@@ -298,11 +295,11 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
             console.warn(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - schema.key property is MISSING from API response.`);
         }
 
-        if (Array.isArray(dtSchema.required) && 
+        if (Array.isArray(dtSchema.required) &&
             dtSchema.required.length === 1 &&
             typeof dtSchema.required[0] === 'string' &&
             dtSchema.required[0].trim().length > 0) {
-          
+
           const potentialPkFromRequired = dtSchema.required[0].trim();
           if (dtSchema.properties && Object.prototype.hasOwnProperty.call(dtSchema.properties, potentialPkFromRequired)) {
             determinedPrimaryKeyField = potentialPkFromRequired;
@@ -325,17 +322,17 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
     } else {
       console.error(`[actions.ts] getDataTableDetails: DataTable ${dataTableId} - NO SCHEMA information returned by the API. Cannot determine primary key.`);
     }
-        
+
     if (dtSchema?.properties) {
         for (const [colName, colDefinitionUntyped] of Object.entries(dtSchema.properties)) {
-            const colDefinition = colDefinitionUntyped as {type: string | {type: string}}; 
-            let columnType = 'string'; 
+            const colDefinition = colDefinitionUntyped as {type: string | {type: string}};
+            let columnType = 'string';
             if (typeof colDefinition.type === 'string') {
                 columnType = colDefinition.type;
             } else if (colDefinition.type && typeof colDefinition.type === 'object' && typeof colDefinition.type.type === 'string') {
-                 columnType = colDefinition.type.type; 
+                 columnType = colDefinition.type.type;
             }
-            
+
             const isPK = colName === determinedPrimaryKeyField;
 
             properties[colName] = {
@@ -350,10 +347,10 @@ export async function getDataTableDetails(dataTableId: string): Promise<DataTabl
       id: dt.id!,
       name: dt.name!,
       description: dt.description,
-      schema: { 
+      schema: {
         properties,
-        primaryKey: determinedPrimaryKeyField ? [determinedPrimaryKeyField] : [], 
-        key: dtSchema?.key, 
+        primaryKey: determinedPrimaryKeyField ? [determinedPrimaryKeyField] : [],
+        key: dtSchema?.key,
         required: dtSchema?.required,
       },
       primaryKeyField: determinedPrimaryKeyField,
@@ -368,11 +365,11 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
   await getAuthenticatedClient();
   const architectApi = new platformClient.ArchitectApi();
   try {
-    const result = await architectApi.getFlowsDatatableRows(dataTableId, { 
-      pageSize: 200, 
-      showbrief: !showEmptyFields 
+    const result = await architectApi.getFlowsDatatableRows(dataTableId, {
+      pageSize: 200,
+      showbrief: !showEmptyFields
     });
-    return result.entities || []; 
+    return result.entities || [];
   } catch (error: any) {
     console.error(`[actions.ts] getDataTableRows: Error fetching rows for DataTable ${dataTableId}:`, error.body || error.message);
     throw new Error(`Failed to fetch rows for DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
@@ -382,7 +379,7 @@ export async function getDataTableRows(dataTableId: string, showEmptyFields: boo
 export async function addDataTableRow(dataTableId: string, rowData: DataTableRow): Promise<DataTableRow> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
-    const dtDetails = await getDataTableDetails(dataTableId); 
+    const dtDetails = await getDataTableDetails(dataTableId);
     if (!dtDetails.primaryKeyField) {
       throw new Error(`Cannot add row: Primary key for DataTable ${dataTableId} is not defined or could not be determined.`);
     }
@@ -390,11 +387,11 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
     if (rowKey === undefined || rowKey === null || String(rowKey).trim() === '') {
         throw new Error(`Cannot add row: Primary key field "${dtDetails.primaryKeyField}" must have a value.`);
     }
-    const body = { ...rowData }; 
+    const body = { ...rowData };
     console.log(`[actions.ts] addDataTableRow: Adding row to table ${dataTableId} with key ${String(rowKey)} and data:`, JSON.stringify(body, null, 2));
     try {
         const newRow = await architectApi.postFlowsDatatableRows(dataTableId, body);
-        return newRow as DataTableRow; 
+        return newRow as DataTableRow;
     } catch (error: any) {
         console.error(`[actions.ts] addDataTableRow: Error adding row to DataTable ${dataTableId}:`, error.body || error.message);
         let details = error.body?.message || error.message;
@@ -410,12 +407,12 @@ export async function addDataTableRow(dataTableId: string, rowData: DataTableRow
 export async function updateDataTableRow(dataTableId: string, rowId: string, rowData: DataTableRow): Promise<DataTableRow> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
-    
-    const bodyForApi = JSON.parse(JSON.stringify(rowData)); 
+
+    const bodyForApi = JSON.parse(JSON.stringify(rowData));
 
     console.log(`[actions.ts] updateDataTableRow: Updating row ${rowId} in table ${dataTableId}. Received rowData:`, JSON.stringify(rowData, null, 2));
     console.log(`[actions.ts] updateDataTableRow: Sending API body (direct rowData):`, JSON.stringify(bodyForApi, null, 2));
-    
+
     try {
         const updatedRow = await architectApi.putFlowsDatatableRow(dataTableId, rowId, bodyForApi);
         return updatedRow as DataTableRow;
@@ -434,11 +431,12 @@ export async function updateDataTableRow(dataTableId: string, rowId: string, row
 export async function deleteDataTableRow(dataTableId: string, rowId: string): Promise<void> {
     await getAuthenticatedClient();
     const architectApi = new platformClient.ArchitectApi();
+    console.log(`[actions.ts] deleteDataTableRow: Deleting row ${rowId} from table ${dataTableId}.`);
     try {
         await architectApi.deleteFlowsDatatableRow(dataTableId, rowId);
     } catch (error: any) {
         console.error(`[actions.ts] deleteDataTableRow: Error deleting row ${rowId} from DataTable ${dataTableId}:`, error.body || error.message);
-        throw new Error(`Failed to delete row ${rowId} from DataTable ${dataTableId}. Details: ${error.body?.message || error.message}`);
+        throw new Error(`Failed to delete row ${rowId} from DataTable. Details: ${error.body?.message || error.message}`);
     }
 }
 
@@ -459,7 +457,7 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
   const routingApi = new platformClient.RoutingApi(apiClient);
   const analyticsApi = new platformClient.AnalyticsApi(apiClient);
 
-  const apiOptions = {}; 
+  const apiOptions = {};
   console.log('[actions.ts] getActiveQueues: API call parameters for routing/queues:', JSON.stringify(apiOptions, null, 2));
 
   let basicQueues: any[] = [];
@@ -499,13 +497,13 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
             operator: "matches",
             value: id,
           }))
-        } as platformClient.Models.QueueObservationQueryFilter, 
+        } as platformClient.Models.QueueObservationQueryFilter,
         metrics: ["oWaiting", "oInteracting", "oAvailableUsers"]
       };
-      
+
       console.log('[actions.ts] getActiveQueues: Analytics observation query body:', JSON.stringify(observationQuery, null, 2));
 
-      const observationResponse = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery as any); 
+      const observationResponse = await analyticsApi.postAnalyticsQueuesObservationsQuery(observationQuery as any);
 
       if (observationResponse.results) {
         const metricsMap = new Map<string, Partial<QueueBasicData>>();
@@ -533,12 +531,8 @@ export async function getActiveQueues(): Promise<QueueBasicData[]> {
       }
     } catch (error: any) {
       console.error('[actions.ts] getActiveQueues: Error fetching queue observation data:', error.body || error.message, error);
-      // We don't re-throw here, so the basic queue list is still returned even if metrics fail.
     }
   }
-  
+
   return mappedQueues.sort((a, b) => a.name.localeCompare(b.name));
 }
-    
-
-    

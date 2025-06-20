@@ -7,7 +7,8 @@ import {
   getDataTableRows,
   getDataTables,
   updateDataTableRow,
-  addDataTableRow, // New action
+  addDataTableRow,
+  deleteDataTableRow, // New action
 } from '@/app/actions';
 import type { DataTable, DataTableDetails, DataTableRow, DataTableColumn } from '@/app/actions';
 import { Button } from '@/components/ui/button';
@@ -38,15 +39,26 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from "@/hooks/use-toast";
-import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle, ListFilter, PlusCircle } from 'lucide-react';
+import { Database, RefreshCw, Loader2, AlertTriangle, Edit3, Save, XCircle, ListFilter, PlusCircle, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DataTablesPage() {
   const [availableDataTables, setAvailableDataTables] = useState<DataTable[]>([]);
   const [selectedTableId, setSelectedTableId] = useState<string | undefined>(undefined);
-  
+
   const [dataTableDetails, setDataTableDetails] = useState<DataTableDetails | null>(null);
   const [dataTableRows, setDataTableRows] = useState<DataTableRow[]>([]);
 
@@ -57,10 +69,13 @@ export default function DataTablesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newRowData, setNewRowData] = useState<DataTableRow | null>(null);
 
+  const [isDeletingRowId, setIsDeletingRowId] = useState<string | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
   const [isLoadingTablesList, startLoadingTablesList] = useTransition();
   const [isLoadingDetails, startLoadingDetails] = useTransition();
   const [isLoadingRows, startLoadingRows] = useTransition();
-  const [isSubmitting, startSubmitting] = useTransition(); // Used for both edit and create
+  const [isSubmitting, startSubmitting] = useTransition(); // Used for edit, create, and delete
 
   useEffect(() => {
     startLoadingTablesList(async () => {
@@ -89,8 +104,8 @@ export default function DataTablesPage() {
   const fetchDataForTable = (tableId: string) => {
     startLoadingDetails(async () => {
       try {
-        setDataTableDetails(null); 
-        setDataTableRows([]); 
+        setDataTableDetails(null);
+        setDataTableRows([]);
         const details = await getDataTableDetails(tableId);
         setDataTableDetails(details);
       } catch (error: any) {
@@ -105,7 +120,7 @@ export default function DataTablesPage() {
 
     startLoadingRows(async () => {
       try {
-        const rows = await getDataTableRows(tableId, true); 
+        const rows = await getDataTableRows(tableId, true);
         setDataTableRows(rows);
       } catch (error: any) {
         toast({
@@ -141,17 +156,17 @@ export default function DataTablesPage() {
     if (!dataTableDetails?.schema?.properties) return [];
     const pkField = dataTableDetails.primaryKeyField;
     const allColumnNames = Object.keys(dataTableDetails.schema.properties);
-  
+
     const sortedAllColumnNames = [...allColumnNames].sort((a, b) => a.localeCompare(b));
-  
+
     if (pkField && sortedAllColumnNames.includes(pkField)) {
       const index = sortedAllColumnNames.indexOf(pkField);
-      sortedAllColumnNames.splice(index, 1); 
-      return [pkField, ...sortedAllColumnNames]; 
+      sortedAllColumnNames.splice(index, 1);
+      return [pkField, ...sortedAllColumnNames];
     }
     return sortedAllColumnNames;
   }, [dataTableDetails]);
-  
+
 
   const handleEdit = (row: DataTableRow) => {
     if (!dataTableDetails?.primaryKeyField) {
@@ -159,12 +174,10 @@ export default function DataTablesPage() {
       return;
     }
     const pkField = dataTableDetails.primaryKeyField;
-    const pkValue = String(row[pkField]); 
-    
-    console.log(`[DataTablesPage] handleEdit: Primary Key Field Name: '${pkField}', Primary Key Value for this row: '${pkValue}'`);
+    const pkValue = String(row[pkField]);
 
-    setEditingRowId(pkValue); 
-    setEditedRowData({ ...row }); 
+    setEditingRowId(pkValue);
+    setEditedRowData({ ...row });
     setIsEditDialogOpen(true);
   };
 
@@ -195,38 +208,35 @@ export default function DataTablesPage() {
       toast({ title: "Error", description: "Cannot save, missing critical data (e.g., table ID, primary key value, row data, schema, or PK field name).", variant: "destructive" });
       return;
     }
-    
+
     const payloadForUpdate: DataTableRow = {};
     const schemaProperties = dataTableDetails.schema.properties;
-    // const pkField = dataTableDetails.primaryKeyField; // Not used for exclusion
 
-    // Iterate over all schema properties to build the payload, including the PK
     for (const keyInSchema in schemaProperties) {
         if (Object.prototype.hasOwnProperty.call(schemaProperties, keyInSchema)) {
-            // DO NOT exclude the primary key field
             let value = editedRowData[keyInSchema];
 
-            if (value === undefined) { 
+            if (value === undefined) {
                 payloadForUpdate[keyInSchema] = null;
             } else if (typeof value === 'number' && Number.isNaN(value)) {
-                payloadForUpdate[keyInSchema] = null; 
+                payloadForUpdate[keyInSchema] = null;
             } else if (typeof value === 'boolean') {
-                payloadForUpdate[keyInSchema] = String(value); // Send booleans as strings
+                payloadForUpdate[keyInSchema] = String(value);
             }
             else {
                 payloadForUpdate[keyInSchema] = value;
             }
         }
     }
-    
+
     console.log("[DataTablesPage] Payload for updateDataTableRow (ALL SCHEMA FIELDS INCLUDED, Booleans as STRINGS):", JSON.stringify(payloadForUpdate, null, 2));
 
     startSubmitting(async () => {
       try {
-        await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate); // editingRowId is the PK value for the URL
+        await updateDataTableRow(selectedTableId, editingRowId, payloadForUpdate);
         toast({ title: "Row Updated", description: "Successfully updated the row." });
-        fetchDataForTable(selectedTableId); 
-        handleCancelEdit(); 
+        fetchDataForTable(selectedTableId);
+        handleCancelEdit();
       } catch (error: any) {
         toast({
           title: "Error Updating Row",
@@ -246,13 +256,13 @@ export default function DataTablesPage() {
     Object.keys(dataTableDetails.schema.properties).forEach(colName => {
       const colSchema = getColumnSchema(colName);
       if (colSchema?.type === 'boolean') {
-        initialData[colName] = false; 
+        initialData[colName] = false;
       } else if (colSchema?.type === 'string') {
-        initialData[colName] = ''; 
+        initialData[colName] = '';
       } else if (colSchema?.type === 'number' || colSchema?.type === 'integer') {
-        initialData[colName] = null; 
+        initialData[colName] = null;
       } else {
-        initialData[colName] = ''; 
+        initialData[colName] = '';
       }
     });
     setNewRowData(initialData);
@@ -295,14 +305,14 @@ export default function DataTablesPage() {
             } else if (typeof value === 'number' && Number.isNaN(value)) {
                 rowDataPayload[key] = null;
             } else if (typeof value === 'boolean') {
-                rowDataPayload[key] = String(value); // Send booleans as strings
+                rowDataPayload[key] = String(value);
             }
             else {
                 rowDataPayload[key] = value;
             }
         }
     }
-    
+
     console.log("[DataTablesPage] Payload for addDataTableRow (ALL SCHEMA FIELDS PRESENT, Booleans as STRINGS):", JSON.stringify(rowDataPayload, null, 2));
 
     startSubmitting(async () => {
@@ -321,10 +331,43 @@ export default function DataTablesPage() {
     });
   };
 
+  const openDeleteConfirmDialog = (row: DataTableRow) => {
+    if (!dataTableDetails?.primaryKeyField) {
+      toast({ title: "Error", description: "Primary key field not defined. Deletion is disabled.", variant: "destructive" });
+      return;
+    }
+    const pkValue = String(row[dataTableDetails.primaryKeyField]);
+    setIsDeletingRowId(pkValue);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!selectedTableId || !isDeletingRowId) {
+      toast({ title: "Error", description: "Cannot delete, missing table ID or row ID.", variant: "destructive" });
+      return;
+    }
+    startSubmitting(async () => {
+      try {
+        await deleteDataTableRow(selectedTableId, isDeletingRowId);
+        toast({ title: "Row Deleted", description: `Successfully deleted row with ID ${isDeletingRowId}.` });
+        fetchDataForTable(selectedTableId);
+      } catch (error: any) {
+        toast({
+          title: "Error Deleting Row",
+          description: error.message || `Could not delete row ${isDeletingRowId}.`,
+          variant: "destructive",
+        });
+      } finally {
+        setIsDeleteConfirmOpen(false);
+        setIsDeletingRowId(null);
+      }
+    });
+  };
+
 
   const isLoadingCurrentTableData = isLoadingDetails || isLoadingRows;
   const currentTableName = dataTableDetails?.name || "the selected table";
-  
+
   const getColumnSchema = (colName: string): DataTableColumn | undefined => {
     return dataTableDetails?.schema?.properties?.[colName];
   };
@@ -394,16 +437,16 @@ export default function DataTablesPage() {
                   )}
                 {!dataTableDetails?.primaryKeyField && !isLoadingDetails && dataTableDetails && (
                   <p className="text-xs text-destructive mt-1 font-semibold">
-                    Warning: Primary key not identified by the API for this table. Editing and Creation will be disabled. 
+                    Warning: Primary key not identified by the API for this table. Editing, Creation, and Deletion will be disabled.
                     (Ensure a primary key is set in Genesys Cloud for "{currentTableName}".)
                   </p>
                 )}
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                <Button 
-                  onClick={handleOpenCreateDialog} 
-                  disabled={isLoadingCurrentTableData || isSubmitting || isEditDialogOpen || isCreateDialogOpen || !selectedTableId || !dataTableDetails?.primaryKeyField} 
-                  variant="outline" 
+                <Button
+                  onClick={handleOpenCreateDialog}
+                  disabled={isLoadingCurrentTableData || isSubmitting || isEditDialogOpen || isCreateDialogOpen || !selectedTableId || !dataTableDetails?.primaryKeyField}
+                  variant="outline"
                   size="sm"
                   title={!dataTableDetails?.primaryKeyField ? "Create disabled: No primary key defined" : "Create new row"}
                 >
@@ -431,8 +474,8 @@ export default function DataTablesPage() {
                     <TableHeader>
                       <TableRow>
                         {orderedColumnNames.map(colName => (
-                          <TableHead 
-                            key={colName} 
+                          <TableHead
+                            key={colName}
                             className={colName === dataTableDetails?.primaryKeyField ? 'font-bold text-primary/90' : ''}
                           >
                             {colName}
@@ -441,7 +484,7 @@ export default function DataTablesPage() {
                             </span>
                           </TableHead>
                         ))}
-                        <TableHead className="w-[80px] text-right">Actions</TableHead>
+                        <TableHead className="w-[120px] text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -451,7 +494,10 @@ export default function DataTablesPage() {
                             {orderedColumnNames.map(colName => (
                               <TableCell key={`skel-cell-${i}-${colName}`}><Skeleton className="h-5 w-full" /></TableCell>
                             ))}
-                            <TableCell className="text-right"><Skeleton className="h-8 w-[60px] ml-auto" /></TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Skeleton className="h-8 w-8 inline-block" />
+                              <Skeleton className="h-8 w-8 inline-block" />
+                            </TableCell>
                           </TableRow>
                         ))
                       ) : dataTableRows.length === 0 ? (
@@ -468,7 +514,7 @@ export default function DataTablesPage() {
                               {orderedColumnNames.map(colName => {
                                 const colSchema = getColumnSchema(colName);
                                 const cellValue = row[colName];
-                                
+
                                 let displayAsCheckbox = false;
                                 if (colSchema?.type === 'boolean') {
                                   displayAsCheckbox = true;
@@ -491,17 +537,29 @@ export default function DataTablesPage() {
                                   </TableCell>
                                 );
                               })}
-                              <TableCell className="text-right">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8" 
-                                  disabled={isSubmitting || isEditDialogOpen || isCreateDialogOpen || !dataTableDetails?.primaryKeyField} 
-                                  onClick={() => handleEdit(row)} 
+                              <TableCell className="text-right space-x-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  disabled={isSubmitting || isEditDialogOpen || isCreateDialogOpen || !dataTableDetails?.primaryKeyField || isDeleteConfirmOpen}
+                                  onClick={() => handleEdit(row)}
                                   title={!dataTableDetails?.primaryKeyField ? "Edit disabled: No primary key defined by API" : "Edit row"}
                                 >
                                   <Edit3 className="h-4 w-4" />
                                 </Button>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:text-destructive/80"
+                                    disabled={isSubmitting || isEditDialogOpen || isCreateDialogOpen || !dataTableDetails?.primaryKeyField || isDeleteConfirmOpen}
+                                    onClick={() => openDeleteConfirmDialog(row)}
+                                    title={!dataTableDetails?.primaryKeyField ? "Delete disabled: No primary key defined by API" : "Delete row"}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
                               </TableCell>
                             </TableRow>
                           );
@@ -537,12 +595,12 @@ export default function DataTablesPage() {
 
                 {editedRowData && dataTableDetails && dataTableDetails.schema.properties &&
                   Object.entries(dataTableDetails.schema.properties)
-                    .filter(([colName]) => colName !== dataTableDetails.primaryKeyField) 
-                    .sort(([aName], [bName]) => aName.localeCompare(bName)) 
+                    .filter(([colName]) => colName !== dataTableDetails.primaryKeyField)
+                    .sort(([aName], [bName]) => aName.localeCompare(bName))
                     .map(([colName, colDef]) => {
                       const colSchema = colDef as DataTableColumn;
                       const currentValue = editedRowData?.[colName];
-                      
+
                       let treatAsBooleanInput = false;
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
@@ -552,7 +610,7 @@ export default function DataTablesPage() {
                           treatAsBooleanInput = true;
                         }
                       }
-                      
+
                       return (
                         <div className="grid grid-cols-4 items-center gap-4" key={colName}>
                           <Label htmlFor={`edit-${colName}`} className="text-right col-span-1">
@@ -563,7 +621,7 @@ export default function DataTablesPage() {
                               <Checkbox
                                 id={`edit-${colName}`}
                                 checked={String(currentValue).toLowerCase() === 'true'}
-                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')} 
+                                onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'edit')}
                                 disabled={isSubmitting}
                                 aria-label={`Edit ${colName}`}
                               />
@@ -626,17 +684,17 @@ export default function DataTablesPage() {
                       if (colSchema.type === 'boolean') {
                         treatAsBooleanInput = true;
                       }
-                      
+
                       return (
                         <div className="grid grid-cols-4 items-center gap-4" key={`create-${colName}`}>
                           <Label htmlFor={`create-${colName}`} className={`text-right col-span-1 ${isPrimaryKey ? 'font-bold' : ''}`}>
                             {colName} {isPrimaryKey ? '(Key)' : ''} ({colSchema.type})
                           </Label>
                           <div className="col-span-3">
-                            {treatAsBooleanInput ? ( 
+                            {treatAsBooleanInput ? (
                               <Checkbox
                                 id={`create-${colName}`}
-                                checked={!!currentValue} 
+                                checked={!!currentValue}
                                 onCheckedChange={(checked) => handleInputChange(colName, !!checked, 'create')}
                                 disabled={isSubmitting}
                                 aria-label={`Create ${colName}`}
@@ -680,6 +738,29 @@ export default function DataTablesPage() {
             </DialogContent>
           </Dialog>
 
+          {/* Delete Row Confirmation Dialog */}
+          <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the row with ID "{isDeletingRowId}" from the DataTable "{currentTableName}".
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setIsDeletingRowId(null)} disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirmDelete}
+                  disabled={isSubmitting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
         </main>
       )}
 
@@ -692,14 +773,3 @@ export default function DataTablesPage() {
     </div>
   );
 }
-    
-
-    
-
-    
-
-    
-
-    
-
-    
