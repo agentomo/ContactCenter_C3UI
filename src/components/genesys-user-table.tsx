@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { StatusIndicator, STATUS_ORDER } from './status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+// Badge removed as skills are no longer displayed
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,8 +52,8 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         }
          else {
           // Handles 'name' and 'divisionName'
-          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId' | 'id'>] as string)?.toLowerCase() || '';
-          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'skills' | 'divisionId' | 'id'>] as string)?.toLowerCase() || '';
+          aValue = (a[sortConfig.key as keyof Omit<UserStatus, 'divisionId' | 'id'>] as string)?.toLowerCase() || '';
+          bValue = (b[sortConfig.key as keyof Omit<UserStatus, 'divisionId' | 'id'>] as string)?.toLowerCase() || '';
         }
 
 
@@ -114,12 +114,12 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              {renderHeader('Name', 'name', '20%')}
-              {renderHeader('Email / Login', 'email', '25%')}
-              {renderHeader('Division', 'divisionName', '15%')}
-              {renderHeader('Status', 'status', '10%')}
+              {renderHeader('Name', 'name', '25%')}
+              {renderHeader('Email / Login', 'email', '30%')}
+              {renderHeader('Division', 'divisionName', '20%')}
+              {renderHeader('Status', 'status', '15%')}
               {renderHeader('Extension', 'extension', '10%')}
-              {renderHeader('Skills', undefined, '20%')}
+              {/* Skills column removed */}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -130,7 +130,7 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
                 <TableCell><Skeleton className="h-5 w-3/4 rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-1/2 rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-1/2 rounded" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-full rounded" /></TableCell>
+                {/* Skills cell removed */}
               </TableRow>
             ))}
           </TableBody>
@@ -153,12 +153,12 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
       <Table className="min-w-full">
         <TableHeader>
           <TableRow>
-            {renderHeader('Name', 'name', '20%')}
-            {renderHeader('Email / Login', 'email', '25%')}
-            {renderHeader('Division', 'divisionName', '15%')}
-            {renderHeader('Status', 'status', '10%')}
+            {renderHeader('Name', 'name', '25%')}
+            {renderHeader('Email / Login', 'email', '30%')}
+            {renderHeader('Division', 'divisionName', '20%')}
+            {renderHeader('Status', 'status', '15%')}
             {renderHeader('Extension', 'extension', '10%')}
-            {renderHeader('Skills', undefined, '20%')}
+            {/* Skills column removed */}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -171,19 +171,7 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
                 <StatusIndicator status={user.status} />
               </TableCell>
               <TableCell className="py-2.5">{user.extension || <span className="text-xs text-muted-foreground italic">N/A</span>}</TableCell>
-              <TableCell className="py-2.5">
-                {user.skills && user.skills.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {user.skills.map(skill => (
-                      <Badge key={skill.id} variant="secondary" className="text-xs whitespace-nowrap font-normal">
-                        {skill.name} (P{skill.proficiency})
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground italic">No skills</span>
-                )}
-              </TableCell>
+              {/* Skills cell removed */}
             </TableRow>
           ))}
         </TableBody>
@@ -191,3 +179,4 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     </div>
   );
 }
+

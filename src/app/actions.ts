@@ -15,7 +15,7 @@ export interface UserStatus {
   department?: string; 
   title?: string; 
   extension?: string;
-  skills?: UserRoutingSkill[];
+  // skills removed from here
 }
 
 function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['status'] {
@@ -94,7 +94,7 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
       return [];
     }
 
-    const mappedUsersWithoutSkills = (userResponse.entities as GenesysUser[]).map((user) => {
+    const mappedUsers = (userResponse.entities as GenesysUser[]).map((user) => {
       let extension: string | undefined = undefined;
       if (user.primaryContactInfo) {
         const primaryPhoneContact = user.primaryContactInfo.find(
@@ -122,24 +122,12 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
         department: user.department,
         title: user.title,
         extension: extension,
-        skills: [], 
+        // skills property removed
       };
     });
     
-    console.warn('[actions.ts] getGenesysUsers: Fetching skills for each user. This may be slow for many users.');
-    const usersWithDetails = await Promise.all(
-      mappedUsersWithoutSkills.map(async (user) => {
-        try {
-          const skills = await getUserSkills(user.id);
-          return { ...user, skills };
-        } catch (skillError: any) {
-          console.warn(`[actions.ts] getGenesysUsers: Failed to fetch skills for user ${user.id} (${user.name}): ${skillError.message}`);
-          return { ...user, skills: [] }; 
-        }
-      })
-    );
-
-    return usersWithDetails;
+    // Removed skill fetching loop
+    return mappedUsers;
 
   } catch (error: any) {
     console.error('[actions.ts] getGenesysUsers: Error fetching or processing Genesys Cloud user data:', error.body || error.message);
