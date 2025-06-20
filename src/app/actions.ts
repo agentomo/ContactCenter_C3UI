@@ -15,7 +15,6 @@ export interface UserStatus {
   department?: string;
   title?: string;
   extension?: string;
-  // Skills removed from here
 }
 
 function mapGenesysToUserStatus(genesysSystemPresence?: string): UserStatus['status'] {
@@ -48,7 +47,7 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
   const region = process.env.GENESYS_REGION;
 
   if (!clientId || !clientSecret || !region) {
-    console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured.');
+    console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured in the deployment environment.');
     throw new Error('Genesys Cloud API credentials or region not configured. Ensure GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION are correctly set as environment variables in your deployment environment (e.g., Firebase App Hosting).');
   }
 
@@ -579,8 +578,7 @@ export async function getEdgesBasicInfo(): Promise<EdgeBasic[]> {
 
   try {
     const edgesResponse = await telephonyApi.getTelephonyProvidersEdges({
-      pageSize: 100, // Adjust as needed
-      // expand: ['edgeGroup'] // Potential expansion if needed later
+      pageSize: 100, 
     });
 
     if (!edgesResponse.entities || edgesResponse.entities.length === 0) {
@@ -589,7 +587,7 @@ export async function getEdgesBasicInfo(): Promise<EdgeBasic[]> {
     }
     
     const mappedEdges = edgesResponse.entities
-      .filter(edge => edge.state?.toUpperCase() !== 'DELETED') // Filter out deleted edges
+      .filter(edge => edge.state?.toUpperCase() !== 'DELETED') 
       .map(edge => ({
         id: edge.id!,
         name: edge.name!,
@@ -613,5 +611,96 @@ export async function getEdgesBasicInfo(): Promise<EdgeBasic[]> {
         detailedErrorMessage = error.message;
     }
     throw new Error(`Failed to retrieve Edge information from Genesys Cloud. Details: ${detailedErrorMessage}. Check server logs and ensure the OAuth client has 'telephony:providers:edge:view' permission.`);
+  }
+}
+
+// --- Edge Details ---
+export interface ProcessedEdgeMetrics {
+  latestCpuUsage?: { value: number; timestamp: string };
+  latestMemoryUsage?: { value: number; timestamp: string };
+  latestNetworkRtt?: { value: number; timestamp: string; qualifier?: string };
+  // Potentially add others like disk usage, call counts if available and desired
+}
+
+export interface EdgeDetail extends EdgeBasic {
+  // Static details from GET /edges/{edgeId}
+  processors?: { activeCoreCount?: number; type?: string; }[];
+  memory?: { type?: string; totalMemoryBytes?: number; }[];
+  // ... other specific fields like interfaces, site info
+  site?: { id: string; name: string; };
+  // Processed real-time metrics
+  processedMetrics?: ProcessedEdgeMetrics;
+}
+
+
+interface RawMetricPoint {
+  metric?: string;
+  timestamp?: string; // ISO 8601 date-time string
+  value?: number;
+  qualifier?: string;
+}
+
+export async function getEdgeDetails(edgeId: string): Promise<EdgeDetail> {
+  await getAuthenticatedClient();
+  const telephonyApi = new platformClient.TelephonyProvidersEdgeApi();
+
+  try {
+    const edgeDataPromise = telephonyApi.getTelephonyProvidersEdge(edgeId, {expand: ['site']});
+    const metricsDataPromise = telephonyApi.getTelephonyProvidersEdgeMetrics(edgeId);
+
+    const [edgeData, metricsResponse] = await Promise.all([edgeDataPromise, metricsDataPromise]);
+
+    const processedMetrics: ProcessedEdgeMetrics = {};
+    const rawMetrics: RawMetricPoint[] = metricsResponse.metrics || [];
+
+    // Helper to find the latest metric point
+    const findLatestMetric = (metricName: string): RawMetricPoint | undefined => {
+      return rawMetrics
+        .filter(m => m.metric === metricName && m.timestamp && m.value !== undefined)
+        .sort((a, b) => new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime())[0];
+    };
+    
+    const latestCpu = findLatestMetric('edge.cpu.usage');
+    if (latestCpu) {
+      processedMetrics.latestCpuUsage = { value: latestCpu.value!, timestamp: latestCpu.timestamp! };
+    }
+
+    const latestMemory = findLatestMetric('edge.memory.usage');
+    if (latestMemory) {
+      processedMetrics.latestMemoryUsage = { value: latestMemory.value!, timestamp: latestMemory.timestamp! };
+    }
+    
+    // Network RTT can have qualifiers (e.g., "CloudProxy")
+    // We might want to pick a specific one or the one with the latest timestamp overall for 'edge.network.rtt'
+    const latestRtt = findLatestMetric('edge.network.rtt'); // This might need refinement if multiple qualifiers exist
+    if (latestRtt) {
+      processedMetrics.latestNetworkRtt = { value: latestRtt.value!, timestamp: latestRtt.timestamp!, qualifier: latestRtt.qualifier };
+    }
+
+    return {
+      id: edgeData.id!,
+      name: edgeData.name!,
+      description: edgeData.description,
+      status: mapEdgeApiStatus(edgeData.state, edgeData.onlineStatus),
+      edgeGroup: edgeData.edgeGroup ? { id: edgeData.edgeGroup.id!, name: edgeData.edgeGroup.name! } : undefined,
+      apiVersion: edgeData.apiVersion,
+      make: edgeData.make,
+      model: edgeData.model,
+      processors: edgeData.processors as EdgeDetail['processors'],
+      memory: edgeData.memory as EdgeDetail['memory'],
+      site: edgeData.site ? { id: edgeData.site.id!, name: edgeData.site.name! } : undefined,
+      processedMetrics: processedMetrics,
+    };
+
+  } catch (error: any) {
+    console.error(`[actions.ts] getEdgeDetails: Error fetching details for Edge ${edgeId}:`, error.body || error.message);
+    let detailedErrorMessage = `An unknown error occurred while fetching details for Edge ${edgeId}.`;
+     if (error.body && error.body.message) {
+        detailedErrorMessage = error.body.message;
+        if (error.body.contextId) detailedErrorMessage += ` (Trace ID: ${error.body.contextId})`;
+    } else if (error.message) {
+        detailedErrorMessage = error.message;
+    }
+    throw new Error(`Failed to retrieve details for Edge ${edgeId} from Genesys Cloud. Details: ${detailedErrorMessage}.`);
   }
 }
