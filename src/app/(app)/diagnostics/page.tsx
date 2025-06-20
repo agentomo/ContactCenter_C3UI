@@ -3,7 +3,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { format, formatDistanceStrict } from 'date-fns';
-import { CalendarIcon, Filter, Search as SearchIcon, Loader2, AlertTriangle, MessageSquareSearch, Eye } from 'lucide-react';
+import { CalendarIcon, Filter, Search as SearchIcon, Loader2, AlertTriangle, MessageSquareText, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import type { ConversationSearchFilters, ConversationSearchResult } from '@/app/
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConversationDetailDialog } from '@/components/conversation-detail-dialog';
 
 const MAX_DATE_RANGE_DAYS_CONV = 7; // Analytics conversation query often limited for performance
 
@@ -31,6 +32,9 @@ export default function ConversationDiagnosticsPage() {
   const [searchResults, setSearchResults] = useState<ConversationSearchResult[]>([]);
   const [isLoading, startSearchTransition] = useTransition();
   const { toast } = useToast();
+
+  const [selectedConversation, setSelectedConversation] = useState<ConversationSearchResult | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
 
   const handleDateChange = (newDateRange: { from?: Date; to?: Date }) => {
     if (newDateRange.from && newDateRange.to) {
@@ -100,11 +104,11 @@ export default function ConversationDiagnosticsPage() {
     return formatDistanceStrict(0, ms, { unit: 'second' });
   };
 
-  const renderParticipants = (participants: ConversationSearchResult['participants']) => {
+  const renderParticipantsSummary = (participants: ConversationSearchResult['participants']) => {
     if (!participants || participants.length === 0) return <span className="text-muted-foreground italic">None</span>;
     return (
       <div className="flex flex-wrap gap-1">
-        {participants.slice(0, 3).map(p => ( // Show max 3 participants initially
+        {participants.slice(0, 3).map(p => ( 
           <Badge key={p.participantId} variant="secondary" className="text-xs">
             {p.participantName || p.purpose || p.participantId.substring(0,8)}
           </Badge>
@@ -113,12 +117,17 @@ export default function ConversationDiagnosticsPage() {
       </div>
     );
   };
+
+  const handleViewDetails = (conversation: ConversationSearchResult) => {
+    setSelectedConversation(conversation);
+    setIsDetailDialogOpen(true);
+  };
   
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 flex flex-col items-center selection:bg-primary/30 selection:text-primary-foreground">
       <header className="w-full max-w-7xl mb-8 text-center">
         <div className="flex items-center justify-center mb-4" role="banner">
-          <MessageSquareSearch className="w-12 h-12 mr-3 text-primary" />
+          <MessageSquareText className="w-12 h-12 mr-3 text-primary" />
           <h1 className="text-3xl sm:text-4xl font-headline font-bold text-primary tracking-tight">
             Conversation Diagnostics
           </h1>
@@ -178,7 +187,6 @@ export default function ConversationDiagnosticsPage() {
               <Label htmlFor="conversationId">Conversation ID (Optional)</Label>
               <Input id="conversationId" name="conversationId" placeholder="Enter full Conversation ID" value={conversationIdInput} onChange={(e) => setConversationIdInput(e.target.value)} className="h-10" />
             </div>
-           {/* TODO: Add more filters: ANI, DNIS, User, Queue etc. */}
             <div className="lg:col-span-3 flex justify-end">
               <Button onClick={handleSearch} disabled={isLoading} size="lg" className="w-full md:w-auto">
                 {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
@@ -187,7 +195,7 @@ export default function ConversationDiagnosticsPage() {
             </div>
           </div>
            <p className="text-xs text-muted-foreground text-center mt-2">
-              Date range for conversation search is limited to {MAX_DATE_RANGE_DAYS_CONV} days.
+              Date range for conversation search is limited to ${MAX_DATE_RANGE_DAYS_CONV} days.
             </p>
         </CardContent>
       </Card>
@@ -241,12 +249,12 @@ export default function ConversationDiagnosticsPage() {
                         <TableCell className="text-xs">{conv.conversationEnd ? format(new Date(conv.conversationEnd), 'PPpp') : <span className="italic text-muted-foreground">Ongoing</span>}</TableCell>
                         <TableCell className="text-xs">{formatDuration(conv.durationMillis)}</TableCell>
                         <TableCell className="text-xs">{conv.primaryMediaType || <span className="italic text-muted-foreground">N/A</span>}</TableCell>
-                        <TableCell className="text-xs">{renderParticipants(conv.participants)}</TableCell>
+                        <TableCell className="text-xs">{renderParticipantsSummary(conv.participants)}</TableCell>
                         <TableCell className="text-right">
                            <Button 
                              variant="outline" 
                              size="sm"
-                             onClick={() => toast({ title: "Not Implemented", description: "Viewing conversation details will be added soon."})}
+                             onClick={() => handleViewDetails(conv)}
                            >
                                <Eye className="mr-1.5 h-4 w-4" /> Details
                            </Button>
@@ -257,7 +265,6 @@ export default function ConversationDiagnosticsPage() {
                 </TableBody>
               </Table>
             </div>
-            {/* TODO: Add pagination controls if API supports it & more results exist */}
           </CardContent>
         </Card>
          {!isLoading && searchResults.length === 0 && !dateRange.from && (
@@ -266,12 +273,19 @@ export default function ConversationDiagnosticsPage() {
                     <AlertTriangle className="w-8 h-8 text-blue-600" />
                     <div>
                         <CardTitle className="text-blue-800">Getting Started</CardTitle>
-                        <CardDescription className="text-blue-700">Select a date range (max {MAX_DATE_RANGE_DAYS_CONV} days) and optionally provide a Conversation ID to begin your search.</CardDescription>
+                        <CardDescription className="text-blue-700">Select a date range (max ${MAX_DATE_RANGE_DAYS_CONV} days) and optionally provide a Conversation ID to begin your search.</CardDescription>
                     </div>
                 </CardHeader>
             </Card>
         )}
       </main>
+      {selectedConversation && (
+        <ConversationDetailDialog
+          isOpen={isDetailDialogOpen}
+          onOpenChange={setIsDetailDialogOpen}
+          conversation={selectedConversation}
+        />
+      )}
     </div>
   );
 }
