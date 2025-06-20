@@ -670,9 +670,7 @@ export async function getEdgeDetails(edgeId: string): Promise<EdgeDetail> {
       processedMetrics.latestMemoryUsage = { value: latestMemory.value!, timestamp: latestMemory.timestamp! };
     }
     
-    // Network RTT can have qualifiers (e.g., "CloudProxy")
-    // We might want to pick a specific one or the one with the latest timestamp overall for 'edge.network.rtt'
-    const latestRtt = findLatestMetric('edge.network.rtt'); // This might need refinement if multiple qualifiers exist
+    const latestRtt = findLatestMetric('edge.network.rtt'); 
     if (latestRtt) {
       processedMetrics.latestNetworkRtt = { value: latestRtt.value!, timestamp: latestRtt.timestamp!, qualifier: latestRtt.qualifier };
     }
@@ -704,3 +702,139 @@ export async function getEdgeDetails(edgeId: string): Promise<EdgeDetail> {
     throw new Error(`Failed to retrieve details for Edge ${edgeId} from Genesys Cloud. Details: ${detailedErrorMessage}.`);
   }
 }
+
+// --- Audit Trail Viewer Types and Actions ---
+export interface AuditLogQueryFilters {
+  interval: string; // ISO-8601 format, e.g., "2023-01-01T00:00:00Z/2023-01-02T00:00:00Z"
+  serviceName?: string;
+  userId?: string; // Can be user ID
+  action?: string; // e.g., "CREATE", "UPDATE", "DELETE"
+  entityType?: string; // e.g., "User", "Queue", "Flow"
+  queryPhrase?: string; // General search term
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface AuditLogUser {
+  id?: string;
+  name?: string;
+}
+
+export interface AuditLogEntity {
+  id?: string;
+  name?: string;
+  type?: string;
+  selfUri?: string;
+}
+
+export interface AuditLogChange {
+  property?: string;
+  entity?: AuditLogEntity;
+  oldValues?: string[];
+  newValues?: string[];
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userHomeOrgId?: string;
+  user?: AuditLogUser;
+  client?: { id: string, type: string };
+  remoteIp?: string[];
+  serviceName: string;
+  eventDate: string; // ISO-8601 Date
+  message?: { message: string, messageWithParams: string, messageParams: Record<string, any> };
+  action?: string;
+  entity?: AuditLogEntity;
+  entityType?: string;
+  status?: string; // e.g., "SUCCESS", "FAILURE"
+  application?: string;
+  initiatingAction?: { id: string, transactionId: string };
+  transactionInitiator?: boolean;
+  propertyChanges?: AuditLogChange[];
+  context?: Record<string, string>;
+  changes?: AuditLogChange[]; // Alternative field name for propertyChanges
+}
+
+export interface AuditQueryExecutionResults {
+  id?: string;
+  cursor?: string;
+  entities?: AuditLogEntry[];
+}
+
+
+export async function queryAuditLogs(filters: AuditLogQueryFilters): Promise<AuditLogEntry[]> {
+  await getAuthenticatedClient();
+  const auditApi = new platformClient.AuditApi();
+
+  const queryBody: platformClient.Models.AuditQueryRequest = {
+    interval: filters.interval,
+    serviceName: filters.serviceName,
+    filters: [],
+    sort: [{ name: 'eventDate', sortOrder: 'DESC' }],
+    pageNumber: filters.pageNumber || 1,
+    pageSize: filters.pageSize || 25,
+  };
+
+  if (filters.userId) {
+    queryBody.filters!.push({
+      type: 'User',
+      clauses: [{
+        type: 'Value',
+        predicates: [{
+          type: 'Dimension',
+          dimension: 'userId',
+          operator: 'Matches',
+          value: filters.userId,
+        }]
+      }]
+    });
+  }
+  if (filters.action) {
+    queryBody.filters!.push({
+      type: 'Value',
+      predicates: [{
+        type: 'Dimension',
+        dimension: 'action',
+        operator: 'Matches',
+        value: filters.action,
+      }]
+    });
+  }
+  if (filters.entityType) {
+    queryBody.filters!.push({
+      type: 'Value',
+      predicates: [{
+        type: 'Dimension',
+        dimension: 'entityType',
+        operator: 'Matches',
+        value: filters.entityType,
+      }]
+    });
+  }
+  if (filters.queryPhrase) {
+    // General query phrase might be complex to map directly.
+    // Genesys Cloud API might expect specific field searches for phrases.
+    // For simplicity, we'll skip direct general queryPhrase mapping here,
+    // as the API usually expects structured filters.
+    console.warn('[actions.ts] queryAuditLogs: General queryPhrase filtering is not directly implemented in this basic version. Use specific filters.');
+  }
+
+  try {
+    console.log('[actions.ts] queryAuditLogs: Sending audit query:', JSON.stringify(queryBody, null, 2));
+    const result: AuditQueryExecutionResults = await auditApi.postAuditsQuery(queryBody);
+    console.log('[actions.ts] queryAuditLogs: Received audit query results:', result.entities?.length);
+    return result.entities || [];
+  } catch (error: any) {
+    console.error('[actions.ts] queryAuditLogs: Error querying audit logs:', error.body || error.message);
+    let detailedErrorMessage = 'An unknown error occurred while querying audit logs.';
+    if (error.body && error.body.message) {
+        detailedErrorMessage = error.body.message;
+        if (error.body.contextId) detailedErrorMessage += ` (Trace ID: ${error.body.contextId})`;
+    } else if (error.message) {
+        detailedErrorMessage = error.message;
+    }
+    throw new Error(`Failed to query audit logs from Genesys Cloud. Details: ${detailedErrorMessage}. Ensure the OAuth client has 'audit:log:view' permission.`);
+  }
+}
+
+    
