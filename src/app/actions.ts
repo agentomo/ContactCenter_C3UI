@@ -770,7 +770,7 @@ export async function queryAuditLogs(filters: AuditLogQueryFilters): Promise<Aud
     interval: filters.interval,
     serviceName: filters.serviceName,
     filters: [],
-    sort: [{ name: 'eventDate', sortOrder: 'DESC' }],
+    sort: [{ name: 'Timestamp', sortOrder: 'DESC' }], // Changed 'eventDate' to 'Timestamp'
     pageNumber: filters.pageNumber || 1,
     pageSize: filters.pageSize || 25,
   };
