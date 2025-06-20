@@ -619,23 +619,19 @@ export interface ProcessedEdgeMetrics {
   latestCpuUsage?: { value: number; timestamp: string };
   latestMemoryUsage?: { value: number; timestamp: string };
   latestNetworkRtt?: { value: number; timestamp: string; qualifier?: string };
-  // Potentially add others like disk usage, call counts if available and desired
 }
 
 export interface EdgeDetail extends EdgeBasic {
-  // Static details from GET /edges/{edgeId}
   processors?: { activeCoreCount?: number; type?: string; }[];
   memory?: { type?: string; totalMemoryBytes?: number; }[];
-  // ... other specific fields like interfaces, site info
   site?: { id: string; name: string; };
-  // Processed real-time metrics
   processedMetrics?: ProcessedEdgeMetrics;
 }
 
 
 interface RawMetricPoint {
   metric?: string;
-  timestamp?: string; // ISO 8601 date-time string
+  timestamp?: string; 
   value?: number;
   qualifier?: string;
 }
@@ -653,7 +649,6 @@ export async function getEdgeDetails(edgeId: string): Promise<EdgeDetail> {
     const processedMetrics: ProcessedEdgeMetrics = {};
     const rawMetrics: RawMetricPoint[] = metricsResponse.metrics || [];
 
-    // Helper to find the latest metric point
     const findLatestMetric = (metricName: string): RawMetricPoint | undefined => {
       return rawMetrics
         .filter(m => m.metric === metricName && m.timestamp && m.value !== undefined)
@@ -705,12 +700,12 @@ export async function getEdgeDetails(edgeId: string): Promise<EdgeDetail> {
 
 // --- Audit Trail Viewer Types and Actions ---
 export interface AuditLogQueryFilters {
-  interval: string; // ISO-8601 format, e.g., "2023-01-01T00:00:00Z/2023-01-02T00:00:00Z"
+  interval: string; 
   serviceName?: string;
-  userId?: string; // Can be user ID
-  action?: string; // e.g., "CREATE", "UPDATE", "DELETE"
-  entityType?: string; // e.g., "User", "Queue", "Flow"
-  queryPhrase?: string; // General search term
+  userId?: string; 
+  action?: string; 
+  entityType?: string; 
+  queryPhrase?: string; 
   pageNumber?: number;
   pageSize?: number;
 }
@@ -741,18 +736,18 @@ export interface AuditLogEntry {
   client?: { id: string, type: string };
   remoteIp?: string[];
   serviceName: string;
-  eventDate: string; // ISO-8601 Date
+  eventDate: string; 
   message?: { message: string, messageWithParams: string, messageParams: Record<string, any> };
   action?: string;
   entity?: AuditLogEntity;
   entityType?: string;
-  status?: string; // e.g., "SUCCESS", "FAILURE"
+  status?: string; 
   application?: string;
   initiatingAction?: { id: string, transactionId: string };
   transactionInitiator?: boolean;
   propertyChanges?: AuditLogChange[];
   context?: Record<string, string>;
-  changes?: AuditLogChange[]; // Alternative field name for propertyChanges
+  changes?: AuditLogChange[]; 
 }
 
 export interface AuditQueryExecutionResults {
@@ -770,7 +765,7 @@ export async function queryAuditLogs(filters: AuditLogQueryFilters): Promise<Aud
     interval: filters.interval,
     serviceName: filters.serviceName,
     filters: [],
-    sort: [{ name: 'Timestamp', sortOrder: 'DESC' }], // Changed 'eventDate' to 'Timestamp'
+    sort: [{ name: 'Timestamp', sortOrder: 'DESC' }], 
     pageNumber: filters.pageNumber || 1,
     pageSize: filters.pageSize || 25,
   };
@@ -812,10 +807,6 @@ export async function queryAuditLogs(filters: AuditLogQueryFilters): Promise<Aud
     });
   }
   if (filters.queryPhrase) {
-    // General query phrase might be complex to map directly.
-    // Genesys Cloud API might expect specific field searches for phrases.
-    // For simplicity, we'll skip direct general queryPhrase mapping here,
-    // as the API usually expects structured filters.
     console.warn('[actions.ts] queryAuditLogs: General queryPhrase filtering is not directly implemented in this basic version. Use specific filters.');
   }
 
@@ -837,4 +828,160 @@ export async function queryAuditLogs(filters: AuditLogQueryFilters): Promise<Aud
   }
 }
 
+// --- Conversation Diagnostics Types and Actions ---
+export interface ConversationSearchFilters {
+  interval: string; // ISO-8601 format, e.g., "2023-01-01T00:00:00Z/2023-01-02T00:00:00Z"
+  conversationId?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface ConversationParticipantSummary {
+  participantId: string;
+  participantName?: string;
+  purpose?: string; 
+  mediaType?: string; 
+}
+export interface ConversationSearchResult {
+  conversationId: string;
+  conversationStart: string; // ISO-8601
+  conversationEnd?: string; // ISO-8601
+  durationMillis?: number;
+  participants: ConversationParticipantSummary[];
+  primaryMediaType?: string; // Derived: e.g., 'voice', 'chat'
+  divisionIds?: string[];
+}
+
+// Internal type mirroring parts of the SDK's request for POST /api/v2/analytics/conversations/details/query
+interface ConversationDetailQueryRequest {
+  interval: string;
+  conversationFilters?: Array<{
+    type: 'and' | 'or';
+    predicates: Array<{
+      type: 'dimension';
+      dimension: 'conversationId';
+      operator: 'matches';
+      value: string;
+    }>;
+  }>;
+  order?: 'asc' | 'desc';
+  orderBy?: 'conversationStart' | 'conversationEnd';
+  paging: {
+    pageSize: number;
+    pageNumber: number;
+  };
+}
+
+// Internal type mirroring parts of the SDK's AnalyticsConversation
+interface AnalyticsConversation {
+  conversationId?: string;
+  conversationStart?: string;
+  conversationEnd?: string;
+  divisionIds?: string[];
+  participants?: Array<{
+    participantId?: string;
+    participantName?: string;
+    purpose?: string;
+    sessions?: Array<{
+      mediaType?: string;
+      sessionId?: string;
+      segments?: Array<{
+        segmentStart?: string;
+        segmentEnd?: string;
+        segmentType?: string;
+      }>;
+      // ... other session properties
+    }>;
+    // ... other participant properties
+  }>;
+  // ... other conversation properties
+}
+
+interface ConversationQueryExecutionResults {
+  conversations?: AnalyticsConversation[];
+  // aggregations, cursor, etc.
+}
+
+export async function searchConversations(filters: ConversationSearchFilters): Promise<ConversationSearchResult[]> {
+  await getAuthenticatedClient();
+  const analyticsApi = new platformClient.AnalyticsApi();
+
+  const queryBody: ConversationDetailQueryRequest = {
+    interval: filters.interval,
+    orderBy: 'conversationStart',
+    order: 'desc',
+    paging: {
+      pageNumber: filters.pageNumber || 1,
+      pageSize: filters.pageSize || 25,
+    },
+  };
+
+  if (filters.conversationId) {
+    queryBody.conversationFilters = [{
+      type: 'and',
+      predicates: [{
+        type: 'dimension',
+        dimension: 'conversationId',
+        operator: 'matches',
+        value: filters.conversationId,
+      }],
+    }];
+  }
+
+  try {
+    console.log('[actions.ts] searchConversations: Sending conversation query:', JSON.stringify(queryBody, null, 2));
+    const result: ConversationQueryExecutionResults = await analyticsApi.postAnalyticsConversationsDetailsQuery(queryBody as any);
+    console.log('[actions.ts] searchConversations: Received conversation query results:', result.conversations?.length);
+
+    return (result.conversations || []).map(conv => {
+      let durationMillis: number | undefined = undefined;
+      if (conv.conversationStart && conv.conversationEnd) {
+        durationMillis = new Date(conv.conversationEnd).getTime() - new Date(conv.conversationStart).getTime();
+      }
+      
+      const participants: ConversationParticipantSummary[] = (conv.participants || []).map(p => ({
+          participantId: p.participantId!,
+          participantName: p.participantName,
+          purpose: p.purpose,
+          mediaType: p.sessions?.[0]?.mediaType,
+      }));
+
+      // Try to determine a primary media type for the conversation
+      let primaryMediaType: string | undefined;
+      if (participants.length > 0 && participants[0].mediaType) {
+        primaryMediaType = participants[0].mediaType;
+      } else if (conv.participants && conv.participants.length > 0) {
+         // Fallback if first participant summary didn't have it, check raw data
+        primaryMediaType = conv.participants[0].sessions?.[0]?.mediaType;
+      }
+
+
+      return {
+        conversationId: conv.conversationId!,
+        conversationStart: conv.conversationStart!,
+        conversationEnd: conv.conversationEnd,
+        durationMillis,
+        participants,
+        primaryMediaType,
+        divisionIds: conv.divisionIds,
+      };
+    });
+
+  } catch (error: any) {
+    console.error('[actions.ts] searchConversations: Error querying conversations:', error.body || error.message);
+    let detailedErrorMessage = 'An unknown error occurred while querying conversations.';
+    if (error.body && error.body.message) {
+        detailedErrorMessage = error.body.message;
+        if (error.body.contextId) detailedErrorMessage += ` (Trace ID: ${error.body.contextId})`;
+    } else if (error.message) {
+        detailedErrorMessage = error.message;
+    }
+    throw new Error(`Failed to query conversations from Genesys Cloud. Details: ${detailedErrorMessage}. Ensure the OAuth client has 'analytics:conversationDetail:view' permission.`);
+  }
+}
     
+// Placeholder for future getConversationDetails action
+// export async function getConversationDetails(conversationId: string): Promise<any> {
+//   // To be implemented: GET /api/v2/conversations/{conversationId}
+//   // Requires 'conversation:conversation:view' permission
+// }
