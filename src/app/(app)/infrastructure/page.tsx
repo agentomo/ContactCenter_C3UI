@@ -83,10 +83,10 @@ export default function InfrastructurePage() {
         setEdges(edgeData);
         if (edgeData.length === 0) {
             toast({
-                title: "No Edges Found",
-                description: "No Genesys Cloud Edges were found or the application lacks permissions.",
+                title: "No Edges Found by API",
+                description: "The API returned no Edge devices. This could be due to no Edges being configured, or the application's OAuth client lacking necessary permissions (e.g., `telephony:providers:edge:view`) or division access. Check server logs for more details if you expect Edges to be listed.",
                 variant: "default",
-                duration: 7000,
+                duration: 10000,
             });
         } else {
              toast({
@@ -135,7 +135,7 @@ export default function InfrastructurePage() {
         }
       });
     }
-  }, [selectedEdgeForDetails, isDetailsDialogOpen]);
+  }, [selectedEdgeForDetails, isDetailsDialogOpen, toast]);
 
 
   return (
@@ -382,3 +382,4 @@ export default function InfrastructurePage() {
     </div>
   );
 }
+
