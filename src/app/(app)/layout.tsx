@@ -98,7 +98,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
                   >
                     <item.icon className="h-5 w-5" />
-                    <span>{item.label}</span>
+                    <span className="hidden lg:inline">{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               ))}
@@ -123,7 +123,7 @@ const SidebarMenuButton = React.forwardRef<
      <Button
         ref={ref}
         variant={isActive ? 'secondary' : 'ghost'}
-        className="hidden md:inline-flex"
+        className="hidden md:inline-flex items-center justify-center gap-2"
         {...props}
       >
         {children}
