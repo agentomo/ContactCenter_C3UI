@@ -111,43 +111,40 @@ export default function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
-interface SidebarMenuButtonProps extends React.ComponentProps<typeof Button> {
+interface SidebarMenuButtonProps {
   href: string;
   isActive?: boolean;
   tooltip?: string;
   children: ReactNode;
 }
 
-const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
-  SidebarMenuButtonProps
->(({ children, isActive, tooltip, href, ...props }, ref) => {
+const SidebarMenuButton = ({ children, isActive, tooltip, href }: SidebarMenuButtonProps) => {
+
   const buttonContent = (
-      <Button
-        ref={ref}
-        variant={isActive ? 'secondary' : 'ghost'}
-        className="hidden md:inline-flex items-center justify-center gap-2"
-        {...props}
-      >
-        {children}
-      </Button>
+    <Button
+      variant={isActive ? 'secondary' : 'ghost'}
+      className="hidden md:inline-flex items-center justify-center gap-2"
+      // Note: We don't need a ref here because the parent Link will handle it
+    >
+      {children}
+    </Button>
   );
 
   if (!tooltip) {
-    return  <Link href={href} asChild>{buttonContent}</Link>;
+    return <Link href={href}>{buttonContent}</Link>;
   }
 
   return (
     <Tooltip>
-        <TooltipTrigger asChild>
-            <Link href={href} asChild>
-                {buttonContent}
-            </Link>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="center">
-            {tooltip}
-        </TooltipContent>
+      <TooltipTrigger asChild>
+        <Link href={href} passHref>
+          {buttonContent}
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center">
+        {tooltip}
+      </TooltipContent>
     </Tooltip>
   );
-});
+};
 SidebarMenuButton.displayName = "SidebarMenuButton";
