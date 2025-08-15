@@ -36,13 +36,14 @@ export default function SetupPage() {
 
       <Alert className="max-w-2xl w-full mb-8 border-accent">
         <Info className="h-4 w-4" />
-        <AlertTitle className="text-accent">Environment Variables Required</AlertTitle>
+        <AlertTitle className="text-accent">Configuration Required</AlertTitle>
         <AlertDescription>
-          For this application to function, you must set the following as
+           For local development, copy the `.env.local.example` file in the root of this project to `.env.local` and fill in your credentials.
+           For production deployment, you must set these values as
           <a href="https://firebase.google.com/docs/app-hosting/configure#set-env-vars" target="_blank" rel="noopener noreferrer" className="underline font-semibold ml-1">
              environment variables
           </a>
-           in your Firebase App Hosting backend configuration. This page is a guide to the required values.
+           in your Firebase App Hosting backend.
         </AlertDescription>
       </Alert>
 
@@ -74,7 +75,7 @@ export default function SetupPage() {
               <Label htmlFor="redirectUri">GENESYS_REDIRECT_URI</Label>
               <Input id="redirectUri" name="redirectUri" placeholder="Enter your application's redirect URI" required />
               <p className="text-xs text-muted-foreground">
-                The redirect URI configured in your Genesys Cloud OAuth client. This should be the full URL to this application's `/login/callback` page.
+                The redirect URI configured in your Genesys Cloud OAuth client. For local development this is usually `http://localhost:9002/login/callback`.
               </p>
             </div>
             <Button type="submit" className="w-full" disabled>
