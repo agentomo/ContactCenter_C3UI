@@ -1084,3 +1084,12 @@ export async function searchConversations(filters: ConversationSearchFilters): P
 //   // To be implemented: GET /api/v2/conversations/{conversationId}
 //   // Requires 'conversation:conversation:view' permission
 // }
+
+// New action to check if login is configured
+export async function isLoginConfigured(): Promise<boolean> {
+  return !!(
+    process.env.GENESYS_CLIENT_ID &&
+    process.env.GENESYS_REGION &&
+    process.env.GENESYS_REDIRECT_URI
+  );
+}
