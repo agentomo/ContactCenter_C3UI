@@ -161,24 +161,32 @@ export async function getAllDivisions(): Promise<Division[]> {
   }
 }
 
-export async function updateUserDivision(userId: string, divisionId: string): Promise<UserStatus> {
+export async function updateUserDivision(userId: string, newDivisionId: string): Promise<UserStatus> {
   await getAuthenticatedClient();
   const usersApi = new platformClient.UsersApi();
   try {
-    // First, get the current user object to get their version number
-    const currentUser = await usersApi.getUser(userId) as GenesysUser;
+    // First, get the current user object to get their version number and full details
+    const currentUser = await usersApi.getUser(userId, { expand: ['presence', 'primaryContactInfo'] });
     if (currentUser.version === undefined) {
       throw new Error(`Could not retrieve user version for user ID ${userId}. Update failed.`);
     }
 
+    // Create the update body by spreading the existing user object and overriding the division
     const updateBody = {
-      divisionId: divisionId,
-      version: currentUser.version
+      ...currentUser,
+      division: { id: newDivisionId },
     };
+    
+    // The Genesys Cloud SDK expects a specific type, so we delete properties the PUT endpoint doesn't want.
+    delete (updateBody as any).id;
+    delete (updateBody as any).selfUri;
+    delete (updateBody as any).presence;
+    delete (updateBody as any).primaryContactInfo;
+    delete (updateBody as any).routingStatus;
 
-    console.log(`[actions.ts] updateUserDivision: Patching user ${userId} with body:`, JSON.stringify(updateBody, null, 2));
+    console.log(`[actions.ts] updateUserDivision: Putting user ${userId} with updated body:`, JSON.stringify(updateBody, null, 2));
 
-    const updatedUser = await usersApi.patchUser(userId, updateBody);
+    const updatedUser = await usersApi.putUser(userId, updateBody);
 
     // Return a mapped UserStatus object
     return {
@@ -197,10 +205,11 @@ export async function updateUserDivision(userId: string, divisionId: string): Pr
             details += ` (Trace ID: ${error.body.contextId})`;
         }
     }
-    console.error(`[actions.ts] updateUserDivision: Error updating division for user ${userId}:`, details);
+    console.error(`[actions.ts] updateUserDivision: Error updating division for user ${userId}:`, details, error.body);
     throw new Error(`Failed to update division for user. Details: ${details}. Ensure the OAuth client has 'directory:user:edit' permission.`);
   }
 }
+
 
 
 
