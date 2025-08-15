@@ -69,7 +69,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <nav className="flex flex-col gap-2">
                 {navItems.map((item) => (
                   <SheetClose asChild key={item.href}>
-                    <Link href={item.href} legacyBehavior passHref>
+                    <Link href={item.href} legacyBehavior={false} passHref>
                       <Button
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
@@ -92,16 +92,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <nav className="hidden md:flex items-center gap-2">
             <TooltipProvider>
               {navItems.map((item) => (
-                <Link key={item.href} href={item.href} passHref legacyBehavior>
+                <Link key={item.href} href={item.href} passHref asChild>
                   <SidebarMenuButton 
-                    asChild
                     isActive={pathname === item.href}
                     tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
                   >
-                    <a href={item.href}>
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.label}</span>
-                    </a>
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               ))}
