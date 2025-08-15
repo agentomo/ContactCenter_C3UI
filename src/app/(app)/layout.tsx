@@ -16,6 +16,12 @@ import {
   SheetTrigger,
   SheetClose,
 } from '@/components/ui/sheet';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -84,17 +90,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-2">
-            {navItems.map((item) => (
-              <Link key={item.href} href={item.href} asChild>
-                <SidebarMenuButton 
-                  isActive={pathname === item.href}
-                  tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
-                >
-                  <item.icon />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </Link>
-            ))}
+            <TooltipProvider>
+              {navItems.map((item) => (
+                <Link key={item.href} href={item.href} passHref legacyBehavior>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={pathname === item.href}
+                    tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
+                  >
+                    <a href={item.href}>
+                      <item.icon className="h-5 w-5" />
+                      <span>{item.label}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </Link>
+              ))}
+            </TooltipProvider>
           </nav>
 
         </div>
@@ -108,20 +119,35 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean; tooltip?: any; children: React.ReactNode; }
->(({ children, isActive, tooltip, ...allOtherPropsFromParent }, ref) => {
+  React.ComponentProps<typeof Button> & { isActive?: boolean; tooltip?: any; }
+>(({ children, isActive, tooltip, ...props }, ref) => {
 
-  const { asChild: _asChildFromLink, ...propsToPassToShadCNButton } = allOtherPropsFromParent;
+  const buttonElement = (
+     <Button
+        ref={ref}
+        variant={isActive ? 'secondary' : 'ghost'}
+        className="hidden md:inline-flex"
+        {...props}
+      >
+        {children}
+      </Button>
+  );
+
+  if (!tooltip) {
+    return buttonElement;
+  }
+  
+  const {children: tooltipChildren, ...tooltipProps} = typeof tooltip === 'string' ? {children: tooltip} : tooltip;
 
   return (
-    <Button // This is the ShadCN UI Button
-      ref={ref}
-      variant={isActive ? 'secondary' : 'ghost'}
-      {...propsToPassToShadCNButton} 
-    >
-      {children}
-    </Button>
+    <Tooltip {...tooltipProps}>
+      <TooltipTrigger asChild>
+        {buttonElement}
+      </TooltipTrigger>
+      <TooltipContent>
+        {tooltipChildren}
+      </TooltipContent>
+    </Tooltip>
   );
 });
 SidebarMenuButton.displayName = "SidebarMenuButton";
-
