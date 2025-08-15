@@ -115,9 +115,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ComponentProps<typeof Button> & { isActive?: boolean; tooltip?: any; asChild?: boolean; }
->(({ children, isActive, tooltip, ...props }, ref) => {
+>(({ children, isActive, tooltip, asChild, ...props }, ref) => {
 
-  const Comp = props.asChild ? Slot : 'button';
+  const Comp = asChild ? Slot : 'button';
 
   const buttonElement = (
      <Button
@@ -134,17 +134,19 @@ const SidebarMenuButton = React.forwardRef<
     return buttonElement;
   }
   
-  const {children: tooltipChildren, ...tooltipProps} = typeof tooltip === 'string' ? {children: tooltip} : tooltip;
+  const {children: tooltipChildren, ...tooltipProps} = typeof tooltip === 'object' ? tooltip : { children: tooltip };
 
   return (
-    <Tooltip {...tooltipProps}>
-      <TooltipTrigger asChild>
-        {buttonElement}
-      </TooltipTrigger>
-      <TooltipContent>
-        {tooltipChildren}
-      </TooltipContent>
-    </Tooltip>
+    <Comp>
+      <Tooltip {...tooltipProps}>
+        <TooltipTrigger asChild>
+          {buttonElement}
+        </TooltipTrigger>
+        <TooltipContent>
+          {tooltipChildren}
+        </TooltipContent>
+      </Tooltip>
+    </Comp>
   );
 });
 SidebarMenuButton.displayName = "SidebarMenuButton";
