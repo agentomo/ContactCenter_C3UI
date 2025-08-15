@@ -58,9 +58,12 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
     console.error(`[actions.ts] getAuthenticatedClient: Invalid Genesys Cloud region specified: ${region}.`);
     throw new Error(`Invalid Genesys Cloud region specified: "${region}".`);
   }
+  
+  client.setEnvironment(regionHost);
 
+  // For server actions, we should rely on a server-to-server grant
+  // The user login flow will be handled separately
   if (!client.authentications['PureCloud OAuth']?.accessToken) {
-    client.setEnvironment(regionHost);
     try {
       await client.loginClientCredentialsGrant(clientId, clientSecret);
     } catch (authError: any) {
@@ -74,7 +77,30 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
       throw new Error(errorMessage);
     }
   }
+
   return client;
+}
+
+export async function handleLogin(): Promise<string> {
+    const clientId = process.env.GENESYS_CLIENT_ID;
+    const region = process.env.GENESYS_REGION;
+    const redirectUri = process.env.GENESYS_REDIRECT_URI;
+
+    if (!clientId || !region || !redirectUri) {
+        throw new Error('Application not configured for login. Missing client ID, region, or redirect URI.');
+    }
+    
+    const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
+    if (!regionHost) {
+        throw new Error(`Invalid Genesys Cloud region: ${region}`);
+    }
+
+    const authUrl = `https://${regionHost}/oauth/authorize?` +
+        `client_id=${clientId}` +
+        `&response_type=code` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        
+    return authUrl;
 }
 
 
