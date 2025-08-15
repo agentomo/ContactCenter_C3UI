@@ -90,7 +90,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <nav className="hidden md:flex items-center gap-2">
             <TooltipProvider>
               {navItems.map((item) => (
-                <Link key={item.href} href={item.href} passHref asChild>
+                <Link key={item.href} href={item.href} asChild>
                   <SidebarMenuButton 
                     isActive={pathname === item.href}
                     tooltip={{ children: item.label, side: 'bottom', align: 'center' }}
@@ -115,19 +115,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
   React.ComponentProps<typeof Button> & { isActive?: boolean; tooltip?: any; asChild?: boolean; }
->(({ children, isActive, tooltip, asChild, ...props }, ref) => {
+>(({ children, isActive, tooltip, ...props }, ref) => {
 
-  const Comp = asChild ? Slot : Button;
+  const Comp = props.asChild ? Slot : 'button';
 
   const buttonElement = (
-     <Comp
+     <Button
         ref={ref}
         variant={isActive ? 'secondary' : 'ghost'}
         className="hidden md:inline-flex items-center justify-center gap-2"
         {...props}
       >
         {children}
-      </Comp>
+      </Button>
   );
 
   if (!tooltip) {
