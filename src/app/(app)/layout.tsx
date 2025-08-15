@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, ListTodo, Users, Menu, Database, LayoutList, Network, History, SearchCode } from 'lucide-react'; 
+import { Slot } from "@radix-ui/react-slot"
 
 import { Button } from '@/components/ui/button';
 import {
@@ -69,17 +70,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <nav className="flex flex-col gap-2">
                 {navItems.map((item) => (
                   <SheetClose asChild key={item.href}>
-                    <Link href={item.href} legacyBehavior={false} passHref>
+                    <Link href={item.href}>
                       <Button
                         variant={pathname === item.href ? 'secondary' : 'ghost'}
                         className="w-full justify-start gap-2"
                         onClick={() => setIsSheetOpen(false)}
-                        asChild={false} 
                       >
-                        <a> {/* Inner <a> for legacyBehavior + passHref */}
-                          <item.icon className="h-5 w-5" />
-                          <span>{item.label}</span>
-                        </a>
+                        <item.icon className="h-5 w-5" />
+                        <span>{item.label}</span>
                       </Button>
                     </Link>
                   </SheetClose>
@@ -116,18 +114,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
-  React.ComponentProps<typeof Button> & { isActive?: boolean; tooltip?: any; }
->(({ children, isActive, tooltip, ...props }, ref) => {
+  React.ComponentProps<typeof Button> & { isActive?: boolean; tooltip?: any; asChild?: boolean; }
+>(({ children, isActive, tooltip, asChild, ...props }, ref) => {
+
+  const Comp = asChild ? Slot : Button;
 
   const buttonElement = (
-     <Button
+     <Comp
         ref={ref}
         variant={isActive ? 'secondary' : 'ghost'}
         className="hidden md:inline-flex items-center justify-center gap-2"
         {...props}
       >
         {children}
-      </Button>
+      </Comp>
   );
 
   if (!tooltip) {
