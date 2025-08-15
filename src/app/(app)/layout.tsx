@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ListTodo, Users, Menu, Database, LayoutList, Network, History, SearchCode } from 'lucide-react'; 
+import { LayoutDashboard, ListTodo, Users, Menu, Database, LayoutList, Network, History, SearchCode, Settings } from 'lucide-react'; 
 
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +35,7 @@ const navItems = [
   { href: '/infrastructure', label: 'Infrastructure', icon: Network },
   { href: '/audits', label: 'Audit Logs', icon: History },
   { href: '/diagnostics', label: 'Conv. Diagnostics', icon: SearchCode },
+  { href: '/setup', label: 'Setup', icon: Settings },
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -89,15 +90,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <nav className="hidden md:flex items-center gap-2">
             <TooltipProvider>
               {navItems.map((item) => (
-                 <SidebarMenuButton 
-                    key={item.href}
-                    href={item.href}
+                 <Link key={item.href} href={item.href} passHref>
+                  <SidebarMenuButton
                     isActive={pathname === item.href}
                     tooltip={item.label}
                   >
                     <item.icon className="h-5 w-5" />
                     <span className="hidden lg:inline">{item.label}</span>
                   </SidebarMenuButton>
+                </Link>
               ))}
             </TooltipProvider>
           </nav>
@@ -112,39 +113,39 @@ export default function AppLayout({ children }: AppLayoutProps) {
 }
 
 interface SidebarMenuButtonProps {
-  href: string;
+  href?: string;
   isActive?: boolean;
   tooltip?: string;
   children: ReactNode;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
 }
 
-const SidebarMenuButton = ({ children, isActive, tooltip, href }: SidebarMenuButtonProps) => {
+const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(({ children, isActive, tooltip, ...props }, ref) => {
 
   const buttonContent = (
     <Button
+      {...props}
+      ref={ref}
       variant={isActive ? 'secondary' : 'ghost'}
       className="hidden md:inline-flex items-center justify-center gap-2"
-      // Note: We don't need a ref here because the parent Link will handle it
     >
       {children}
     </Button>
   );
 
   if (!tooltip) {
-    return <Link href={href}>{buttonContent}</Link>;
+    return buttonContent;
   }
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Link href={href} passHref>
-          {buttonContent}
-        </Link>
+        {buttonContent}
       </TooltipTrigger>
       <TooltipContent side="bottom" align="center">
         {tooltip}
       </TooltipContent>
     </Tooltip>
   );
-};
+});
 SidebarMenuButton.displayName = "SidebarMenuButton";

@@ -49,14 +49,14 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
 
   if (!clientId || !clientSecret || !region) {
     console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud API credentials or region not configured in the deployment environment.');
-    throw new Error('Genesys Cloud API credentials or region not configured. Ensure GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET, and GENESYS_REGION are correctly set as environment variables in your deployment environment (e.g., Firebase App Hosting).');
+    throw new Error('Genesys Cloud API credentials or region not configured. Please visit the Setup page to learn how to configure these values as environment variables.');
   }
 
   const client = platformClient.ApiClient.instance;
   const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
   if (!regionHost) {
     console.error(`[actions.ts] getAuthenticatedClient: Invalid Genesys Cloud region specified: ${region}.`);
-    throw new Error(`Invalid Genesys Cloud region specified: "${region}".`);
+    throw new Error(`Invalid Genesys Cloud region specified: "${region}". Please correct it on the Setup page.`);
   }
   
   client.setEnvironment(regionHost);
@@ -70,7 +70,7 @@ async function getAuthenticatedClient(): Promise<ApiClient> {
       console.error('[actions.ts] getAuthenticatedClient: Genesys Cloud authentication failed:', authError.message || authError);
       let errorMessage = 'Genesys Cloud authentication failed.';
       if (authError.message?.includes('invalid_client')) {
-        errorMessage = 'Genesys Cloud authentication failed: Invalid client ID or secret, or client not authorized for client_credential grant.';
+        errorMessage = 'Genesys Cloud authentication failed: Invalid client ID or secret, or client not authorized for client_credential grant. Please check your credentials on the Setup page.';
       } else if (authError.body && authError.body.error === 'unauthorized_client') {
         errorMessage = 'Genesys Cloud authentication failed: Client is not authorized to use the client_credential grant type. Please check OAuth client configuration in Genesys Cloud.';
       }
@@ -87,7 +87,7 @@ export async function handleLogin(): Promise<string> {
     const redirectUri = process.env.GENESYS_REDIRECT_URI;
 
     if (!clientId || !region || !redirectUri) {
-        throw new Error('Application not configured for login. Missing client ID, region, or redirect URI.');
+        throw new Error('Application not configured for login. Missing Client ID, Region, or Redirect URI. Please visit the Setup page to learn how to configure these environment variables.');
     }
     
     const regionHost = platformClient.PureCloudRegionHosts[region as keyof typeof platformClient.PureCloudRegionHosts];
