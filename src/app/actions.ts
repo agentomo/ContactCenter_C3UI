@@ -34,11 +34,12 @@ interface GenesysUser {
   id: string;
   name: string;
   presence?: { presenceDefinition?: { id: string; systemPresence?: string; }; };
-  division?: { id: string; name: string; };
+  division?: { id:string; name: string; };
   email?: string;
   department?: string;
   title?: string;
   primaryContactInfo?: { address: string; mediaType: string; type: string; extension?: string; display?: string }[];
+  version?: number; // Add version for updates
 }
 
 async function getAuthenticatedClient(): Promise<ApiClient> {
@@ -138,6 +139,69 @@ export async function getGenesysUsers(): Promise<UserStatus[]> {
     throw new Error(`Failed to retrieve user statuses from Genesys Cloud. Details: ${detailedErrorMessage}. Check server logs for the full error object and Genesys API response body.`);
   }
 }
+
+export interface Division {
+  id: string;
+  name: string;
+}
+
+export async function getAllDivisions(): Promise<Division[]> {
+  await getAuthenticatedClient();
+  const authorizationApi = new platformClient.AuthorizationApi();
+  try {
+    // Note: This fetches all divisions the client has permission to see.
+    // For very large orgs, pagination would be needed here.
+    const result = await authorizationApi.getAuthorizationDivisions({ pageSize: 200 });
+    return (result.entities || [])
+      .map(div => ({ id: div.id!, name: div.name! }))
+      .sort((a,b) => a.name.localeCompare(b.name));
+  } catch (error: any) {
+    console.error('[actions.ts] getAllDivisions: Error fetching divisions:', error.body || error.message);
+    throw new Error(`Failed to fetch divisions from Genesys Cloud. Details: ${error.body?.message || error.message}. Ensure OAuth client has 'directory:division:view' permission.`);
+  }
+}
+
+export async function updateUserDivision(userId: string, divisionId: string): Promise<UserStatus> {
+  await getAuthenticatedClient();
+  const usersApi = new platformClient.UsersApi();
+  try {
+    // First, get the current user object to get their version number
+    const currentUser = await usersApi.getUser(userId) as GenesysUser;
+    if (currentUser.version === undefined) {
+      throw new Error(`Could not retrieve user version for user ID ${userId}. Update failed.`);
+    }
+
+    const updateBody = {
+      divisionId: divisionId,
+      version: currentUser.version
+    };
+
+    console.log(`[actions.ts] updateUserDivision: Patching user ${userId} with body:`, JSON.stringify(updateBody, null, 2));
+
+    const updatedUser = await usersApi.patchUser(userId, updateBody);
+
+    // Return a mapped UserStatus object
+    return {
+      id: updatedUser.id!,
+      name: updatedUser.name!,
+      status: mapGenesysToUserStatus(updatedUser.presence?.presenceDefinition?.systemPresence),
+      divisionId: updatedUser.division?.id || 'N/A',
+      divisionName: updatedUser.division?.name || 'N/A',
+    };
+
+  } catch (error: any) {
+    let details = error.message;
+    if (error.body && error.body.message) {
+        details = error.body.message;
+        if (error.body.contextId) {
+            details += ` (Trace ID: ${error.body.contextId})`;
+        }
+    }
+    console.error(`[actions.ts] updateUserDivision: Error updating division for user ${userId}:`, details);
+    throw new Error(`Failed to update division for user. Details: ${details}. Ensure the OAuth client has 'directory:user:edit' permission.`);
+  }
+}
+
 
 
 export interface SkillDefinition {

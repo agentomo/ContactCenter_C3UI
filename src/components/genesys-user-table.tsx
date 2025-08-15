@@ -13,13 +13,14 @@ import {
 } from '@/components/ui/table';
 import { StatusIndicator, STATUS_ORDER } from './status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
-// Badge removed as skills are no longer displayed
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ArrowUp, ArrowDown, Minus, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface GenesysUserTableProps {
   users: UserStatus[];
   isLoading: boolean;
+  onEditUser: (user: UserStatus) => void;
 }
 
 type SortableColumn = 'name' | 'email' | 'divisionName' | 'status' | 'extension';
@@ -30,7 +31,7 @@ interface SortConfig {
   direction: SortDirection;
 }
 
-export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
+export function GenesysUserTable({ users, isLoading, onEditUser }: GenesysUserTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'name', direction: 'asc' });
 
   const sortedUsers = useMemo(() => {
@@ -90,12 +91,12 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     return <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  const renderHeader = (label: string, columnKey?: SortableColumn, fixedWidth?: string) => (
+  const renderHeader = (label: string, columnKey?: SortableColumn, fixedWidth?: string, className?: string) => (
     <TableHead
         className={cn(
             "font-semibold text-sm", 
             columnKey && "cursor-pointer hover:bg-muted/50 transition-colors",
-            fixedWidth && `w-[${fixedWidth}]`
+            className
         )}
         onClick={columnKey ? () => requestSort(columnKey) : undefined}
         style={fixedWidth ? { width: fixedWidth } : {}}
@@ -115,11 +116,11 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
           <TableHeader>
             <TableRow>
               {renderHeader('Name', 'name', '25%')}
-              {renderHeader('Email / Login', 'email', '30%')}
+              {renderHeader('Email / Login', 'email', '25%')}
               {renderHeader('Division', 'divisionName', '20%')}
               {renderHeader('Status', 'status', '15%')}
               {renderHeader('Extension', 'extension', '10%')}
-              {/* Skills column removed */}
+              {renderHeader('Actions', undefined, '5%', 'text-right')}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -130,7 +131,7 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
                 <TableCell><Skeleton className="h-5 w-3/4 rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-1/2 rounded" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-1/2 rounded" /></TableCell>
-                {/* Skills cell removed */}
+                <TableCell className="text-right"><Skeleton className="h-8 w-8 inline-block rounded" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -154,11 +155,11 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
         <TableHeader>
           <TableRow>
             {renderHeader('Name', 'name', '25%')}
-            {renderHeader('Email / Login', 'email', '30%')}
+            {renderHeader('Email / Login', 'email', '25%')}
             {renderHeader('Division', 'divisionName', '20%')}
             {renderHeader('Status', 'status', '15%')}
             {renderHeader('Extension', 'extension', '10%')}
-            {/* Skills column removed */}
+            {renderHeader('Actions', undefined, '5%', 'text-right')}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -171,7 +172,12 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
                 <StatusIndicator status={user.status} />
               </TableCell>
               <TableCell className="py-2.5">{user.extension || <span className="text-xs text-muted-foreground italic">N/A</span>}</TableCell>
-              {/* Skills cell removed */}
+              <TableCell className="py-2.5 text-right">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditUser(user)}>
+                  <Edit3 className="h-4 w-4" />
+                  <span className="sr-only">Edit User</span>
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -179,4 +185,3 @@ export function GenesysUserTable({ users, isLoading }: GenesysUserTableProps) {
     </div>
   );
 }
-
